@@ -82,8 +82,8 @@ class JWTAuthManager(JWTAuthManagerInterface):
         except JWTError:
             raise InvalidTokenError
 
-    def verify_refresh_token_or_raise(self, token: str) -> None:
+    def verify_refresh_token(self, token: str) -> None:
         self.decode_refresh_token(token)
 
-    def verify_access_token_or_raise(self, token: str) -> None:
+    def verify_access_token(self, token: str) -> None:
         self.decode_access_token(token)
