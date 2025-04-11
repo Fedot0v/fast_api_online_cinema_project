@@ -27,7 +27,7 @@ class UserGroupEnum(str, enum.Enum):
     MODERATOR = "moderator"
 
 
-class UserGenderEnum(str, enum.Enum):
+class GenderEnum(str, enum.Enum):
     MALE = "male"
     FEMALE = "female"
 
@@ -175,8 +175,8 @@ class UserProfileModel(Base):
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     avatar: Mapped[str] = mapped_column(String(255))
-    gender: Mapped[UserGenderEnum] = mapped_column(
-        Enum(UserGenderEnum)
+    gender: Mapped[GenderEnum] = mapped_column(
+        Enum(GenderEnum)
     )
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date)
     info: Mapped[Optional[str]] = mapped_column(Text)
