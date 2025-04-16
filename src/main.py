@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from src.routes import accounts
 
 
 app = FastAPI(
@@ -7,3 +8,9 @@ app = FastAPI(
 )
 
 api_version_prefix = "/api/v1"
+
+app.include_router(
+    accounts.router,
+    prefix=api_version_prefix,
+    tags=["accounts"]
+)
