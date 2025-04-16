@@ -3,8 +3,9 @@ from typing import Type, Sequence
 
 from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-from database.models.accounts import UserModel, GenderEnum, UserProfileModel, RefreshTokenModel, ActivationTokenModel, \
+from src.database.models.accounts import UserModel, GenderEnum, UserProfileModel, RefreshTokenModel, ActivationTokenModel, \
     PasswordResetTokenModel, TokenBaseModel
 
 
@@ -156,9 +157,10 @@ class TokenRepository(BaseAccountRepository):
     ) -> ActivationTokenModel | None:
         stmt = select(ActivationTokenModel).where(
             ActivationTokenModel.token == token_value
-        )
+        ).options(joinedload(ActivationTokenModel.user))
+
         result = await self.db.execute(stmt)
-        return result.scalars().first()
+        return result.scalar_one_or_none()
 
     async def get_password_reset_token(self, token_value: str) -> PasswordResetTokenModel | None:
         stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.token == token_value)
