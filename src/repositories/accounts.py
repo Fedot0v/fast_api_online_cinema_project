@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
-from typing import Type, Sequence
+from typing import Type, Sequence, List
 
+from fastapi import HTTPException, status
 from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -37,6 +38,29 @@ class UserRepository(BaseAccountRepository):
         stmt = select(UserModel).where(UserModel.id == user_id)
         result = await self.db.execute(stmt)
         return result.scalars().first()
+
+    async def update_password(
+            self,
+            user: UserModel,
+            new_password: str
+    ) -> UserModel:
+        try:
+            user.password = new_password
+            await self.db.commit()
+            await self.db.refresh(user)
+            return user
+        except ValueError as e:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid password: {str(e)}"
+            )
+        except Exception:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An error occurred during password update."
+            )
 
 
 class ProfileRepository(BaseAccountRepository):
@@ -110,46 +134,18 @@ class ProfileRepository(BaseAccountRepository):
         return result.scalars().first()
 
 
-class TokenRepository(BaseAccountRepository):
-    async def create_refresh_token(
-            self,
-            user_id: int,
-            days_valid: int,
-            token: str
-    ) -> RefreshTokenModel:
-        token_obj = RefreshTokenModel.create(
-            user_id=user_id,
-            days_valid=days_valid,
-            token=token
-        )
-        self.db.add(token_obj)
-        return token_obj
+class BaseTokenRepository(BaseAccountRepository):
 
-    async def delete_expired_tokens(self) -> None:
-        now = datetime.now(timezone.utc)
-        await self.db.execute(
-            delete(ActivationTokenModel)
-            .where(ActivationTokenModel.expires_at < now)
-        )
-        await self.db.execute(
-            delete(PasswordResetTokenModel)
-            .where(PasswordResetTokenModel.expires_at < now)
-        )
-        await self.db.execute(
-            delete(RefreshTokenModel)
-            .where(RefreshTokenModel.expires_at < now)
-        )
-
-    async def get_active_refresh_tokens(
+    async def delete_token(
             self,
-            user_id: int
-    ) -> Sequence[RefreshTokenModel]:
-        stmt = select(RefreshTokenModel).where(
-            RefreshTokenModel.user_id == user_id,
-            RefreshTokenModel.expires_at > datetime.now(timezone.utc)
-        )
-        result = await self.db.execute(stmt)
-        return result.scalars().all()
+            token_value: str,
+            token_model: Type[TokenBaseModel]
+    ) -> None:
+        stmt = delete(token_model).where(token_model.token == token_value)
+        await self.db.execute(stmt)
+
+
+class ActivationTokenRepository(BaseTokenRepository):
 
     async def get_activation_token(
             self,
@@ -162,20 +158,39 @@ class TokenRepository(BaseAccountRepository):
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_password_reset_token(self, token_value: str) -> PasswordResetTokenModel | None:
-        stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.token == token_value)
-        result = await self.db.execute(stmt)
-        return result.scalars().first()
 
-    async def get_refresh_token(self, token_value: str) -> RefreshTokenModel | None:
-        stmt = select(RefreshTokenModel).where(RefreshTokenModel.token == token_value)
-        result = await self.db.execute(stmt)
-        return result.scalars().first()
+class PasswordResetTokenRepository(BaseTokenRepository):
 
-    async def delete_token(
+    async def get_token(
             self,
-            token_value: str,
-            token_model: Type[TokenBaseModel]
+            user_id: int
+    ) -> List[PasswordResetTokenModel]:
+        stmt = select(PasswordResetTokenModel).where(
+            PasswordResetTokenModel.user_id == user_id
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def delete_tokens(
+            self,
+            tokens: List[PasswordResetTokenModel]
     ) -> None:
-        stmt = delete(token_model).where(token_model.token == token_value)
-        await self.db.execute(stmt)
+        for token in tokens:
+            await self.db.delete(token)
+        await self.db.commit()
+
+    @staticmethod
+    def create_reset_token_instance(
+            user_id: int
+    ) -> PasswordResetTokenModel:
+        return PasswordResetTokenModel(user_id=user_id)
+
+    async def get_by_token(
+            self,
+            token: str
+    ) -> PasswordResetTokenModel | None:
+        stmt = select(PasswordResetTokenModel).where(
+            PasswordResetTokenModel.token == token
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
