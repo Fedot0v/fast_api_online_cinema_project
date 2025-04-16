@@ -1,14 +1,51 @@
 from datetime import date
 
 from fastapi import UploadFile, Form, File, HTTPException
-from pydantic import BaseModel, field_validator, HttpUrl
+from pydantic import BaseModel, field_validator, HttpUrl, EmailStr, ConfigDict
 
-from validation.profile import (
+from src.database.validators.accounts import validate_password_strength
+from src.database.validators.profile import (
     validate_name,
     validate_image,
     validate_gender,
     validate_birth_date
 )
+
+
+class MessageSchema(BaseModel):
+    message: str
+
+
+class BasePasswordEmailSchema(BaseModel):
+    email: EmailStr
+    password: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value):
+        return value.lower()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value):
+        return validate_password_strength(value)
+
+
+class UserRegistrationSchema(BasePasswordEmailSchema):
+    group_id: int = 1
+
+
+class UserRegistrationResponseSchema(BaseModel):
+    id: int
+    email: EmailStr
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenRequestSchema(BaseModel):
+    token: str
 
 
 class ProfileCreateSchema(BaseModel):
