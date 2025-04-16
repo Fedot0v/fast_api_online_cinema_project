@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, status
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.dependencies.accounts import get_user_service, get_activation_token_service
+from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service
 from src.schemas.accounts import (
     UserRegistrationSchema,
     UserRegistrationResponseSchema,
-    TokenRequestSchema,
-    MessageSchema
+    MessageSchema,
+    BaseTokenSchema, BaseEmailSchema, PasswordResetCompleteRequestSchema
 )
-from src.services.accounts import UserAccountService, ActivationTokenService
+from src.services.accounts import RegistrationService, ActivationTokenService, PasswordResetTokenService
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 )
 async def register(
         response_data: UserRegistrationSchema,
-        user_service: UserAccountService = Depends(get_user_service)
+        user_service: RegistrationService = Depends(get_user_service)
 ) -> UserRegistrationResponseSchema:
     user = await user_service.register_user(
         email=cast(str, response_data.email),
@@ -91,12 +91,101 @@ async def register(
     
 )
 async def activate_account(
-        activation_data: TokenRequestSchema,
+        activation_data: BaseTokenSchema,
         token_service: ActivationTokenService = Depends(
             get_activation_token_service
         )
-) -> MessageSchema:
+) -> dict:
     await token_service.validate_and_activate_user(activation_data.token)
     return {"message": "User account activated successfully."}
 
 
+@router.post(
+    "/reset-password/request/",
+    response_model=dict,
+    summary="Password reset request",
+    description="Request a password reset link by sending an email "
+                "with a password reset link to the user's email address.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {
+            "description": "Bad Request - The email is invalid.",
+            "content": {"application/json": {
+                "example": {
+                    "invalid_email": {
+                        "detail": "Invalid email or token."
+                    },
+                    "invalid_token": {
+                        "detail": "Invalid email or token."
+                    }
+                }
+            }}
+        }
+    }
+)
+async def password_reset(
+        request_data: BaseEmailSchema,
+        token_service: PasswordResetTokenService = Depends(
+            get_password_reset_token_service
+        )
+) -> dict:
+    return await token_service.request_password_reset(
+        cast(str, request_data.email)
+    )
+
+
+@router.post(
+    "/reset-password/complete/",
+    response_model=dict,
+    summary="Password reset completion",
+    description="Complete the password reset process by "
+                "validating the password reset token and updating the user's password.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {
+            "description": (
+                "Bad Request - The provided email or token is invalid, "
+                "the token has expired, or the user account is not active."
+            ),
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_email_or_token": {
+                            "summary": "Invalid Email or Token",
+                            "value": {
+                                "detail": "Invalid email or token."
+                            }
+                        },
+                        "expired_token": {
+                            "summary": "Expired Token",
+                            "value": {
+                                "detail": "Invalid email or token."
+                            }
+                        }
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred while resetting the password.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "An error occurred while resetting the password."
+                    }
+                }
+            },
+        }
+    }
+)
+async def password_reset_complete(
+        reset_data: PasswordResetCompleteRequestSchema,
+        token_service: PasswordResetTokenService = Depends(
+            get_password_reset_token_service
+        )
+) -> dict:
+    return await token_service.complete_password_reset(
+        cast(str, reset_data.email),
+        reset_data.token,
+        reset_data.password
+    )
