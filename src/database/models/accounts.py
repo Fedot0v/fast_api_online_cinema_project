@@ -11,14 +11,15 @@ from sqlalchemy import (
     func,
     ForeignKey, Date, Text, UniqueConstraint
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, DeclarativeBase
 
 from src.database.validators import accounts as validators
 from src.security.passwords import hash_password
 from src.security.utils import generate_secure_token
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+ pass
 
 
 class UserGroupEnum(str, enum.Enum):
