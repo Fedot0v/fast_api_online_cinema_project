@@ -1,130 +1,19 @@
+import logging
 from datetime import timezone, datetime
 from typing import cast
 
 from fastapi import HTTPException, status
-from pydantic import EmailStr
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database import UserModel, ActivationTokenModel
-from src.repositories.accounts import UserRepository, ActivationTokenRepository, \
+from src.database import UserModel
+from src.repositories.accounts import (
+    UserRepository,
     PasswordResetTokenRepository
-from src.security.interfaces import JWTAuthManagerInterface
+)
+from src.services.base import BaseAccountService
 from src.services.emails import EmailSenderService
 
-
-class BaseAccountService:
-    def __init__(
-            self,
-            db: AsyncSession
-    ):
-        self.db = db
-
-
-class RegistrationService(BaseAccountService):
-    def __init__(
-            self,
-            db: AsyncSession,
-            jwt_manager: JWTAuthManagerInterface,
-            email_sender_service: EmailSenderService
-    ):
-        super().__init__(db)
-        self.jwt_manager = jwt_manager
-        self.user_rep = UserRepository(db)
-        self.email_sender_service = email_sender_service
-
-    async def register_user(self, email: str, password: str, group_id: int = 1) -> UserModel:
-        existing_user = await self.user_rep.get_user_by_email(email)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"A user with this email {email} already exists."
-            )
-
-        new_user = await self.user_rep.create_user(email, password, group_id)
-
-        try:
-            await self.db.flush()
-            await self.db.refresh(new_user)
-
-            activation_token = self.jwt_manager.create_access_token(
-                data={"sub": new_user.email, "type": "activation"}
-            )
-
-            token_model = ActivationTokenModel(
-                user_id=new_user.id,
-                token=activation_token
-            )
-            self.db.add(token_model)
-            await self.db.commit()
-
-            activation_link = f"http://localhost:8000/activate/{activation_token}" #TODO change to real url in future
-
-            await self.email_sender_service.send_activation_email(
-                email=new_user.email,
-                activation_link=activation_link
-            )
-
-            return new_user
-        except IntegrityError:
-            await self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"A user with this email {new_user.email} already exists."
-            )
-        except Exception as e:
-            await self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred during registration."
-            )
-
-
-class ActivationTokenService(BaseAccountService):
-    def __init__(
-            self,
-            db: AsyncSession,
-            email_sender_service: EmailSenderService
-    ):
-        super().__init__(db)
-        self.token_rep = ActivationTokenRepository(db)
-        self.email_sender_service = email_sender_service
-
-    async def validate_and_activate_user(self, token: str) -> UserModel:
-        activation_token = await self.token_rep.get_activation_token(token)
-
-        if not activation_token:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired activation token."
-            )
-
-        expires_at_with_tz = activation_token.expires_at.replace(tzinfo=timezone.utc)
-        if expires_at_with_tz < datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired activation token."
-            )
-
-        user = activation_token.user
-
-        if user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already active."
-            )
-
-        user.is_active = True
-        await self.db.commit()
-        await self.token_rep.delete_token(token, ActivationTokenModel)
-
-        login_link = "http://localhost:8000/login/"
-        await self.email_sender_service.send_activation_complete_email(
-            email=user.email,
-            login_link=login_link
-        )
-
-        return user
+logger = logging.getLogger(__name__)
 
 
 class PasswordResetTokenService(BaseAccountService):
