@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, status
 from pydantic import EmailStr
 
 from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service, \
-    get_register_service, get_user_auth_service
+    get_register_service, get_user_auth_service, get_admin_service
+from src.dependencies.auth import require_permissions, get_current_user
 from src.schemas.accounts import (
     UserRegistrationSchema,
     UserRegistrationResponseSchema,
@@ -13,6 +14,7 @@ from src.schemas.accounts import (
     RefreshTokenSchema, AccessTokenSchema
 )
 from src.services.auth.activation_token_service import ActivationTokenService
+from src.services.auth.admin_service import AdminService
 from src.services.auth.password_reset_token_service import PasswordResetTokenService
 from src.services.auth.registration_service import RegistrationService
 from src.services.auth.user_auth_service import UserAuthService
@@ -322,3 +324,87 @@ async def logout(
     user_service: UserAuthService = Depends(get_user_service)
 ) -> MessageSchema:
     return await user_service.logout_user(token_data.refresh_token)
+
+
+@router.post(
+    "/change-group/",
+    response_model=MessageSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Change user group",
+    description="Manually change the group of a user by admin.",
+    responses={
+        404: {
+            "description": "Not Found - User not found.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "User not found."}
+                }
+            }
+        },
+        400: {
+            "description": "Bad Request - The provided group ID is invalid.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Invalid group ID."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during group change.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred during group change."}
+                }
+            }
+        }
+    },
+    dependencies=[Depends(require_permissions(["manage_users"]))]
+)
+async def change_group(
+        user_id: int,
+        new_group_id: int,
+        current_user: dict = Depends(get_current_user),
+        admin_service: AdminService = Depends(get_admin_service)
+) -> MessageSchema:
+    await admin_service.change_user_group(user_id, new_group_id, current_user["user_id"])
+    return MessageSchema(message="User group changed successfully.")
+
+
+@router.post(
+    "/manual-activate/",
+    response_model=MessageSchema,
+    responses={
+        404: {
+            "description": "Not Found - User not found.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "User not found."}
+                }
+            }
+        },
+        400: {
+            "description": "Bad Request - User is already active.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "User is already active."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during activation.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred during activation."}
+                }
+            }
+        }
+    },
+    dependencies=[Depends(require_permissions(["manage_users"]))]
+)
+async def manual_activate(
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    admin_service: AdminService = Depends(get_admin_service)
+):
+    await admin_service.manually_activate_user(user_id, current_user["user_id"])
+    return MessageSchema(message="Account activated successfully")
