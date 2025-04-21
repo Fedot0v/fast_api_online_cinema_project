@@ -7,6 +7,7 @@ from src.config.dependencies import get_jwt_auth_manager, get_settings
 from src.repositories.accounts import ActivationTokenRepository, RefreshTokenRepository, UserRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.services.auth.activation_token_service import ActivationTokenService
+from src.services.auth.admin_service import AdminService
 from src.services.auth.password_reset_token_service import PasswordResetTokenService
 from src.services.auth.registration_service import RegistrationService
 from src.services.auth.user_auth_service import UserAuthService
@@ -119,3 +120,9 @@ def get_user_service(
         user_repository: UserRepository = Depends(get_user_repository)
 ) -> UserService:
     return UserService(db, user_repository)
+
+def get_admin_service(
+        db: AsyncSession = Depends(get_db),
+        user_repository: UserRepository = Depends(get_user_repository)
+) -> AdminService:
+    return AdminService(db, user_repository)
