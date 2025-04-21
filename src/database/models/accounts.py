@@ -11,15 +11,12 @@ from sqlalchemy import (
     func,
     ForeignKey, Date, Text, UniqueConstraint
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, DeclarativeBase
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from src.database.models.base import Base
 from src.database.validators import accounts as validators
-from src.security.passwords import hash_password
+from src.security.passwords import hash_password, verify_password
 from src.security.utils import generate_secure_token
-
-
-class Base(DeclarativeBase):
- pass
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -163,6 +160,12 @@ class UserModel(Base):
     @validates("email")
     def validate_email(self, key, value):
         return validators.validate_email(value.lower())
+
+    def verify_password(self, raw_password: str) -> bool:
+        """
+        Verify the provided password against the stored hashed password.
+        """
+        return verify_password(raw_password, self._hashed_password)
 
 
 class UserProfileModel(Base):
