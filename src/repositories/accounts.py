@@ -194,3 +194,12 @@ class PasswordResetTokenRepository(BaseTokenRepository):
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+
+
+class RefreshTokenRepository(BaseTokenRepository):
+    async def get_refresh_token(self, token: str) -> RefreshTokenModel | None:
+        stmt = select(RefreshTokenModel).where(
+            RefreshTokenModel.token == token
+        ).options(joinedload(RefreshTokenModel.user))
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
