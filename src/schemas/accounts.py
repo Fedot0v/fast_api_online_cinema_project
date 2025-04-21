@@ -1,7 +1,9 @@
 from datetime import date
+from typing import Annotated
 
+from src.database.validators.accounts import validate_email
 from fastapi import UploadFile, Form, File, HTTPException
-from pydantic import BaseModel, field_validator, HttpUrl, EmailStr, ConfigDict
+from pydantic import BaseModel, field_validator, HttpUrl, EmailStr, ConfigDict, AfterValidator
 
 from src.database.validators.accounts import validate_password_strength
 from src.database.validators.profile import (
@@ -12,25 +14,32 @@ from src.database.validators.profile import (
 )
 
 
+class BaseTokenSchema(BaseModel):
+    token: str
+
+
+class BaseEmailSchema(BaseModel):
+    email: Annotated[
+        EmailStr,
+        AfterValidator(validate_email)
+    ]
+
+
+class BasePasswordSchema(BaseModel):
+    password: Annotated[
+        str,
+        AfterValidator(validate_password_strength)
+    ]
+
+
 class MessageSchema(BaseModel):
     message: str
 
 
-class BasePasswordEmailSchema(BaseModel):
-    email: EmailStr
-    password: str
+class BasePasswordEmailSchema(BaseEmailSchema, BasePasswordSchema):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, value):
-        return value.lower()
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, value):
-        return validate_password_strength(value)
 
 
 class UserRegistrationSchema(BasePasswordEmailSchema):
@@ -44,8 +53,24 @@ class UserRegistrationResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TokenRequestSchema(BaseModel):
+class PasswordResetCompleteRequestSchema(BasePasswordSchema):
     token: str
+
+
+class LoginRequestSchema(BaseEmailSchema, BasePasswordSchema):
+    pass
+
+
+class RefreshTokenSchema(BaseModel):
+    refresh_token: str
+
+
+class AccessTokenSchema(BaseModel):
+    access_token: str
+
+
+class LoginResponseSchema(RefreshTokenSchema, AccessTokenSchema):
+   token_type: str
 
 
 class ProfileCreateSchema(BaseModel):
