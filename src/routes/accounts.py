@@ -2,18 +2,23 @@ from typing import cast
 
 from fastapi import APIRouter, Depends, status
 from pydantic import EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service
+from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service, \
+    get_register_service, get_user_auth_service
 from src.schemas.accounts import (
     UserRegistrationSchema,
     UserRegistrationResponseSchema,
     MessageSchema,
-    BaseTokenSchema, BaseEmailSchema, PasswordResetCompleteRequestSchema
+    BaseTokenSchema, BaseEmailSchema, PasswordResetCompleteRequestSchema, LoginResponseSchema, LoginRequestSchema,
+    RefreshTokenSchema, AccessTokenSchema
 )
-from src.services.accounts import RegistrationService, ActivationTokenService, PasswordResetTokenService
+from src.services.auth.activation_token_service import ActivationTokenService
+from src.services.auth.password_reset_token_service import PasswordResetTokenService
+from src.services.auth.registration_service import RegistrationService
+from src.services.auth.user_auth_service import UserAuthService
+from src.services.auth.user_service import UserService
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter()
 
 
 @router.post(
@@ -44,9 +49,9 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 )
 async def register(
         response_data: UserRegistrationSchema,
-        user_service: RegistrationService = Depends(get_user_service)
+        register_service: RegistrationService = Depends(get_register_service)
 ) -> UserRegistrationResponseSchema:
-    user = await user_service.register_user(
+    user = await register_service.register_user(
         email=cast(str, response_data.email),
         password=response_data.password,
         group_id=response_data.group_id
@@ -94,9 +99,10 @@ async def activate_account(
         activation_data: BaseTokenSchema,
         token_service: ActivationTokenService = Depends(
             get_activation_token_service
-        )
+        ),
+        user_service: UserService = Depends(get_user_service)
 ) -> dict:
-    await token_service.validate_and_activate_user(activation_data.token)
+    await token_service.process_activation(activation_data.token, user_service)
     return {"message": "User account activated successfully."}
 
 
@@ -189,3 +195,130 @@ async def password_reset_complete(
         reset_data.token,
         reset_data.password
     )
+
+
+@router.post(
+    "/login/",
+    response_model=LoginResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="User login",
+    description="Log in a user account by providing their email and password.",
+    responses={
+        401: {
+            "description": "Unauthorized - Invalid email or password.",
+            "content": {"application/json": {
+                "example": {
+                    "detail": "Invalid email or password."
+                }
+            }}
+        },
+        403: {
+            "description": "Forbidden - User account is not active.",
+            "content": {"application/json": {
+                "example": {
+                    "detail": "User is not active."
+                }
+            }}
+        }
+
+    }
+)
+async def login(
+        login_data: LoginRequestSchema,
+        user_service: UserAuthService = Depends(get_user_auth_service)
+) -> LoginResponseSchema:
+    response = await user_service.login_user(
+        cast(str, login_data.email),
+        cast(str, login_data.password)
+    )
+    return LoginResponseSchema(**response)
+
+
+@router.post(
+    "/refresh/",
+    response_model=RefreshTokenSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Refresh access token",
+    description="Refresh the access token by providing a valid refresh token.",
+    responses={
+        400: {
+            "description": "Bad Request - The refresh token is invalid or expired.",
+            "content": {"application/json": {
+                "example": {
+                    "expired_token": {
+                        "summary": "Expired Token",
+                        "detail": "Token has expired."
+                    },
+                    "invalid_token": {
+                        "summary": "Invalid Token",
+                        "detail": "Invalid refresh token."
+                    }
+                }
+            }}
+        },
+        401: {
+            "description": "Unauthorized - Invalid refresh token.",
+            "content": {"application/json": {
+                "example": {
+                    "detail": "Refresh token not found."
+                }
+            }}
+        },
+        404: {
+            "description": "Not Found - User not found.",
+            "content": {"application/json": {
+                "example": {
+                    "detail": "User not found."
+                }
+            }}
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during refresh.",
+            "content": {"application/json": {
+                "example": {
+                    "detail": "An error occurred during refresh."
+                }
+            }}
+        }
+    }
+)
+async def refresh_access_token(
+        refresh_data: RefreshTokenSchema,
+        user_service: UserAuthService = Depends(get_user_service)
+) -> AccessTokenSchema:
+    response = await user_service.refresh_access_token(
+        cast(str, refresh_data.refresh_token)
+    )
+    return AccessTokenSchema(**response)
+
+
+@router.post(
+    "/logout/",
+    response_model=MessageSchema,
+    status_code=status.HTTP_200_OK,
+    summary="User logout",
+    description="Log out a user by invalidating their refresh token.",
+    responses={
+        401: {
+            "description": "Unauthorized - Invalid or missing refresh token.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Invalid refresh token."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during logout.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred during logout."}
+                }
+            }
+        }
+    }
+)
+async def logout(
+    token_data: RefreshTokenSchema,
+    user_service: UserAuthService = Depends(get_user_service)
+) -> MessageSchema:
+    return await user_service.logout_user(token_data.refresh_token)
