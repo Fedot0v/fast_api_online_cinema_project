@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, status
 from pydantic import EmailStr
 
 from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service, \
-    get_register_service, get_user_auth_service, get_admin_service
+    get_register_service, get_user_auth_service, get_admin_service, get_profile_service
 from src.dependencies.auth import require_permissions, get_current_user
 from src.schemas.accounts import (
     UserRegistrationSchema,
     UserRegistrationResponseSchema,
     MessageSchema,
     BaseTokenSchema, BaseEmailSchema, PasswordResetCompleteRequestSchema, LoginResponseSchema, LoginRequestSchema,
-    RefreshTokenSchema, AccessTokenSchema
+    RefreshTokenSchema, AccessTokenSchema, ProfileResponseSchema, ProfileCreateSchema, UpdateProfileSchema
 )
 from src.services.auth.activation_token_service import ActivationTokenService
 from src.services.auth.admin_service import AdminService
@@ -19,6 +19,7 @@ from src.services.auth.password_reset_token_service import PasswordResetTokenSer
 from src.services.auth.registration_service import RegistrationService
 from src.services.auth.user_auth_service import UserAuthService
 from src.services.auth.user_service import UserService
+from src.services.profiles.profile_service import ProfileService
 
 router = APIRouter()
 
@@ -408,3 +409,89 @@ async def manual_activate(
 ):
     await admin_service.manually_activate_user(user_id, current_user["user_id"])
     return MessageSchema(message="Account activated successfully")
+
+
+@router.post(
+    "/create-profile/",
+    response_model=ProfileResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {
+            "description": "Bad Request - User is already active.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "User is already active."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during profile creation,"
+                           "Failed to save avatar.",
+            "content": {
+                "application/json": {
+                    "example": {"error_avatar": {
+                        "summary": "Failed to save avatar",
+                        "value": "Failed to save avatar."
+                    }},
+                }
+            }
+        }
+    }
+)
+async def create_profile(
+        data: ProfileCreateSchema = Depends(ProfileCreateSchema.from_form),
+        current_user: dict = Depends(get_current_user),
+        profile_service: ProfileService = Depends(get_profile_service)
+) -> ProfileResponseSchema:
+    profile = await profile_service.create_profile(current_user["user_id"], data)
+    return ProfileResponseSchema(
+        id=profile.id,
+        user_id=profile.user_id,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        gender=profile.gender,
+        date_of_birth=profile.date_of_birth,
+        info=profile.info,
+        avatar=profile.avatar
+    )
+
+
+@router.patch(
+    "/update-profile/",
+    response_model=ProfileResponseSchema,
+    status_code=status.HTTP_200_OK,
+    responses={
+        404: {
+            "description": "Not Found - Profile not found.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Profile not found."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred during profile update.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to update profile"}
+                }
+            }
+        }
+    }
+)
+async def update_profile(
+    data: UpdateProfileSchema = Depends(UpdateProfileSchema.from_form),
+    current_user: dict = Depends(get_current_user),
+    profile_service: ProfileService = Depends(get_profile_service)
+) -> ProfileResponseSchema:
+    profile = await profile_service.update_profile(current_user["user_id"], data)
+    return ProfileResponseSchema(
+        id=profile.id,
+        user_id=profile.user_id,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        gender=profile.gender,
+        date_of_birth=profile.date_of_birth,
+        info=profile.info,
+        avatar=profile.avatar
+    )
