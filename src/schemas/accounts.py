@@ -1,9 +1,10 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Optional
 
+from src.database.models.accounts import GenderEnum
 from src.database.validators.accounts import validate_email
 from fastapi import UploadFile, Form, File, HTTPException
-from pydantic import BaseModel, field_validator, HttpUrl, EmailStr, ConfigDict, AfterValidator
+from pydantic import BaseModel, field_validator, HttpUrl, EmailStr, ConfigDict, AfterValidator, Field
 
 from src.database.validators.accounts import validate_password_strength
 from src.database.validators.profile import (
@@ -74,22 +75,22 @@ class LoginResponseSchema(RefreshTokenSchema, AccessTokenSchema):
 
 
 class ProfileCreateSchema(BaseModel):
-    first_name: str
-    last_name: str
-    gender: str
-    date_of_birth: date
-    info: str
-    avatar: UploadFile
+    first_name: str = Field(..., max_length=100)
+    last_name: str = Field(..., max_length=100)
+    gender: GenderEnum
+    date_of_birth: Optional[date] = None
+    info: Optional[str] = None
+    avatar: Optional[UploadFile] = None
 
     @classmethod
     def from_form(
-            cls,
-            first_name: str = Form(...),
-            last_name: str = Form(...),
-            gender: str = Form(...),
-            date_of_birth: date = Form(...),
-            info: str = Form(...),
-            avatar: UploadFile = File(...)
+        cls,
+        first_name: str = Form(...),
+        last_name: str = Form(...),
+        gender: GenderEnum = Form(...),
+        date_of_birth: Optional[date] = Form(None),
+        info: Optional[str] = Form(None),
+        avatar: Optional[UploadFile] = File(None, description="Avatar image")
     ) -> "ProfileCreateSchema":
         return cls(
             first_name=first_name,
@@ -183,6 +184,128 @@ class ProfileCreateSchema(BaseModel):
                 }]
             )
         return cleaned_info
+
+
+class UpdateProfileSchema(BaseModel):
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    gender: Optional[GenderEnum] = None
+    date_of_birth: Optional[date] = None
+    info: Optional[str] = None
+    avatar: Optional[UploadFile] = None
+
+    @classmethod
+    def from_form(
+            cls,
+            first_name: Optional[str] = Form(None),
+            last_name: Optional[str] = Form(None),
+            gender: Optional[GenderEnum] = Form(None),
+            date_of_birth: Optional[date] = Form(None),
+            info: Optional[str] = Form(None),
+            avatar: Optional[UploadFile] = File(None)
+    ) -> "UpdateProfileSchema":
+        return cls(
+            first_name=first_name,
+            last_name=last_name,
+            gender=gender,
+            date_of_birth=date_of_birth,
+            info=info,
+            avatar=avatar
+        )
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name_field(cls, name: Optional[str], field) -> Optional[str]:
+        if name is not None:
+            try:
+                validate_name(name)
+                return name.lower()
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=[{
+                        "type": "value_error",
+                        "loc": ["first_name" if "first_name" in name else "last_name"],
+                        "msg": str(e),
+                        "input": name
+                    }]
+                )
+        return name
+
+    @field_validator("avatar")
+    @classmethod
+    def validate_avatar(cls, avatar: Optional[UploadFile]) -> Optional[UploadFile]:
+        if avatar is not None:
+            try:
+                validate_image(avatar)
+                return avatar
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=[{
+                        "type": "value_error",
+                        "loc": ["avatar"],
+                        "msg": str(e),
+                        "input": avatar.filename
+                    }]
+                )
+        return avatar
+
+    @field_validator("gender")
+    @classmethod
+    def validate_gender_field(cls, gender: Optional[GenderEnum]) -> Optional[GenderEnum]:
+        if gender is not None:
+            try:
+                validate_gender(gender.value)
+                return gender
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=[{
+                        "type": "value_error",
+                        "loc": ["gender"],
+                        "msg": str(e),
+                        "input": gender
+                    }]
+                )
+        return gender
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, date_of_birth: Optional[date]) -> Optional[date]:
+        if date_of_birth is not None:
+            try:
+                validate_birth_date(date_of_birth)
+                return date_of_birth
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=[{
+                        "type": "value_error",
+                        "loc": ["date_of_birth"],
+                        "msg": str(e),
+                        "input": str(date_of_birth)
+                    }]
+                )
+        return None
+
+    @field_validator("info")
+    @classmethod
+    def validate_info(cls, info: Optional[str]) -> Optional[str]:
+        if info is not None:
+            cleaned_info = info.strip()
+            if not cleaned_info:
+                raise HTTPException(
+                    status_code=422,
+                    detail=[{
+                        "type": "value_error",
+                        "loc": ["info"],
+                        "msg": "Info field cannot be empty or contain only spaces.",
+                        "input": info
+                    }]
+                )
+            return cleaned_info
+        return None
 
 
 class ProfileResponseSchema(BaseModel):
