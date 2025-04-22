@@ -5,6 +5,7 @@ from src.config.settings import Settings
 from src.database import get_db
 from src.config.dependencies import get_jwt_auth_manager, get_settings
 from src.repositories.accounts import ActivationTokenRepository, RefreshTokenRepository, UserRepository
+from src.repositories.profiles import ProfileRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.services.auth.activation_token_service import ActivationTokenService
 from src.services.auth.admin_service import AdminService
@@ -15,6 +16,7 @@ from src.services.auth.user_service import UserService
 from src.services.emails import EmailSenderService
 import logging
 
+from src.services.profiles.profile_service import ProfileService
 from src.services.validation.user_validation_service import UserValidationService
 
 logger = logging.getLogger(__name__)
@@ -126,3 +128,13 @@ def get_admin_service(
         user_repository: UserRepository = Depends(get_user_repository)
 ) -> AdminService:
     return AdminService(db, user_repository)
+
+def get_profile_repository(
+        db: AsyncSession = Depends(get_db)
+) -> ProfileRepository:
+    return ProfileRepository(db)
+
+def get_profile_service(
+        profile_repository: ProfileRepository = Depends(get_profile_repository)
+) -> ProfileService:
+    return ProfileService(profile_repository)
