@@ -178,7 +178,7 @@ class UserProfileModel(Base):
     )
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    avatar: Mapped[str] = mapped_column(String(255))
+    avatar: Mapped[Optional[str]] = mapped_column(String(255))
     gender: Mapped[GenderEnum] = mapped_column(
         Enum(GenderEnum)
     )
