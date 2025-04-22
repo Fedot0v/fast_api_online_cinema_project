@@ -1,11 +1,10 @@
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from src.database import UserModel, ActivationTokenModel
+from src.database import UserModel, ActivationTokenModel, PasswordResetTokenModel
 
 
 @pytest.mark.asyncio
@@ -14,6 +13,7 @@ async def test_register_user(client: AsyncClient, user_data: dict, db_session):
         "/api/v1/accounts/register/",
         json=user_data
     )
+    print(response)
     assert response.status_code == 201, "Expected status code 201 Created."
     response_data = response.json()
     assert response_data["email"] == user_data["email"], "Returned email does not match."
@@ -104,3 +104,53 @@ async def test_activate_account_already_active(client: AsyncClient, registered_u
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "User is already active."
+
+
+@pytest.mark.asyncio
+async def test_request_password_reset_success(client: AsyncClient, registered_user, db_session):
+    registered_user.is_active = True
+    await db_session.commit()
+    response = await client.post(
+        "/api/v1/accounts/reset-password/request/",
+        json={"email": registered_user.email}
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == ("If you are registered, "
+                                          "you  wil receive an email with instructions."
+                                          )
+
+    stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == registered_user.id)
+    result = await db_session.execute(stmt)
+    token = result.scalar_one_or_none()
+    assert token is not None
+    assert token.user_id == registered_user.id
+    assert token.expires_at.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)
+
+@pytest.mark.asyncio
+async def test_request_password_reset_inactive_user(client: AsyncClient, registered_user, db_session):
+    registered_user.is_active = False
+    await db_session.commit()
+    response = await client.post(
+        "/api/v1/accounts/reset-password/request/",
+        json={"email": registered_user.email}
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == ("If you are registered, "
+                                          "you  wil receive an email with instructions."
+                                          )
+
+    stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == registered_user.id)
+    result = await db_session.execute(stmt)
+    token = result.scalar_one_or_none()
+    assert token is None
+
+@pytest.mark.asyncio
+async def test_request_password_reset_nonexistent_email(client: AsyncClient):
+    response = await client.post(
+        "/api/v1/accounts/reset-password/request/",
+        json={"email": "nonexistent@example.com"}
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == ("If you are registered, "
+                                          "you  wil receive an email with instructions."
+                                          )
