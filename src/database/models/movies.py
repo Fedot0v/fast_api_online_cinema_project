@@ -294,6 +294,14 @@ class MovieCommentModel(Base):
         ),
         nullable=False
     )
+    parent_comment_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "comments.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
     content: Mapped[str] = mapped_column(
         Text,
         nullable=False
@@ -317,6 +325,10 @@ class MovieCommentModel(Base):
     notifications: Mapped[List["NotificationModel"]] = relationship(
         back_populates="comment",
         cascade="all, delete"
+    )
+    parent: Mapped[Optional["MovieCommentModel"]] = relationship(
+        back_populates="replies",
+        remote_side=[id]
     )
 
 
