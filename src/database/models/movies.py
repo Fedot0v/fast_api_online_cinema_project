@@ -1,10 +1,12 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import Integer, String, ForeignKey, Float, DECIMAL, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, MANYTOMANY, relationship
+from sqlalchemy import Integer, String, ForeignKey, Float, DECIMAL, Text, UniqueConstraint, DateTime, func, Boolean
+from sqlalchemy.orm import Mapped, mapped_column, MANYTOMANY, relationship, validates
 
 from src.database.models.base import Base
+from src.database.utils import with_normalized_name_events
 
 
 class MovieGenreModel(Base):
@@ -70,6 +72,7 @@ class MovieStarModel(Base):
     )
 
 
+@with_normalized_name_events
 class GenreModel(Base):
     __tablename__ = "genres"
 
@@ -83,6 +86,12 @@ class GenreModel(Base):
         unique=True,
         nullable=False
     )
+    normalized_name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
+    )
+
     movies: Mapped[List["MovieModel"]] = relationship(
         secondary=MovieGenreModel.__table__,
         back_populates="genres",
@@ -90,6 +99,7 @@ class GenreModel(Base):
     )
 
 
+@with_normalized_name_events
 class StarModel(Base):
     __tablename__ = "stars"
 
@@ -103,6 +113,11 @@ class StarModel(Base):
         unique=True,
         nullable=False
     )
+    normalized_name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
+    )
     movies: Mapped[List["MovieModel"]] = relationship(
         secondary=MovieStarModel.__table__,
         back_populates="stars",
@@ -110,6 +125,7 @@ class StarModel(Base):
     )
 
 
+@with_normalized_name_events
 class DirectorModel(Base):
     __tablename__ = "directors"
 
@@ -122,6 +138,11 @@ class DirectorModel(Base):
         String(255),
         unique=True,
         nullable=False
+    )
+    normalized_name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
     )
     movies: Mapped[List["MovieModel"]] = relationship(
         secondary=MovieDirectorModel.__table__,
@@ -161,7 +182,7 @@ class MovieModel(Base):
         unique=True,
         nullable=False
     )
-    name: Mapped[str] = mapped_column(
+    title: Mapped[str] = mapped_column(
         String(255),
         nullable=False
     )
@@ -227,4 +248,190 @@ class MovieModel(Base):
         secondary=MovieStarModel.__table__,
         back_populates="stars",
         cascade="all, delete"
+    )
+    likes: Mapped[List["MovieLikeModel"]] = relationship(
+        "MovieLikeModel",
+        back_populates="movie",
+        cascade="all, delete"
+    )
+    ratings: Mapped[List["MovieRatingModel"]] = relationship(
+        "MovieRatingModel",
+        back_populates="movie",
+        cascade="all, delete"
+    )
+    favorites: Mapped[List["MovieFavoriteModel"]] = relationship(
+        "MovieFavoriteModel",
+        back_populates="movie",
+        cascade="all, delete"
+    )
+    comments: Mapped[List["MovieCommentModel"]] = relationship(
+        "MovieCommentModel",
+        back_populates="movie",
+        cascade="all, delete"
+    )
+
+
+class MovieCommentModel(Base):
+    __tablename__ = "comments"
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "movies.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    ),
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now()
+    )
+
+    user: Mapped["UserModel"] = relationship(
+        back_populates="movie_comments"
+    )
+    movie: Mapped["MovieModel"] = relationship(
+        back_populates="comments"
+    )
+    likes: Mapped[List["CommentLikeModel"]] = relationship(
+        back_populates="comment",
+        cascade="all, delete"
+    )
+    notifications: Mapped[List["NotificationModel"]] = relationship(
+        back_populates="comment",
+        cascade="all, delete"
+    )
+
+
+class MovieLikeModel(Base):
+    __tablename__ = "movie_likes"
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "movies.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    is_like: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "movie_id",
+            name="unique_user_movie_like"
+        )
+    )
+
+    user: Mapped["UserModel"] = relationship(
+        back_populates="movie_likes"
+    )
+    movie: Mapped["MovieModel"] = relationship(
+        back_populates="likes"
+    )
+
+
+class MovieRatingModel(Base):
+    __tablename__ = "movie_ratings"
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "movies.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    rating: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    @validates("rating")
+    def validate_rating(self, key, value):
+        if not 1 <= value <= 10:
+            raise ValueError("Rating must be between 1 and 10.")
+        return value
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "movie_id",
+            name="unique_user_movie_rating"
+        )
+    )
+
+    user: Mapped["UserModel"] = relationship(
+        back_populates="movie_ratings"
+    )
+    movie: Mapped["MovieModel"] = relationship(
+        back_populates="ratings"
+    )
+
+
+class MovieFavoriteModel(Base):
+    __tablename__ = "movie_favorites"
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    movie_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "movies.id",
+            ondelete="CASCADE"
+        ),
+        primary_key=True
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "movie_id",
+            name="unique_user_movie_favorite"
+        )
+    )
+    user: Mapped["UserModel"] = relationship(
+        back_populates="movie_favorites"
+    )
+    movie: Mapped["MovieModel"] = relationship(
+        back_populates="favorites"
     )
