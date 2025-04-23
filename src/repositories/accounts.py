@@ -7,10 +7,10 @@ from sqlalchemy.orm import joinedload
 
 from src.database.models.accounts import UserModel, GenderEnum, UserProfileModel, RefreshTokenModel, ActivationTokenModel, \
     PasswordResetTokenModel, TokenBaseModel
-from src.repositories.base import BaseAccountRepository
+from src.repositories.base import BaseRepository
 
 
-class UserRepository(BaseAccountRepository):
+class UserRepository(BaseRepository):
     async def create_user(
             self,
             email: str,
@@ -55,7 +55,7 @@ class UserRepository(BaseAccountRepository):
             )
 
 
-class BaseTokenRepository(BaseAccountRepository):
+class BaseTokenRepository(BaseRepository):
 
     async def delete_token(
             self,
