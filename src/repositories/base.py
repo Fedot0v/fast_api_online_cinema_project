@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class BaseAccountRepository:
+class BaseRepository:
     def __init__(
             self,
             db: AsyncSession,
