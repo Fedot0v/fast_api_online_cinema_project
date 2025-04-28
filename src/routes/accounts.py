@@ -460,6 +460,11 @@ async def create_profile(
     "/update-profile/",
     response_model=ProfileResponseSchema,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permissions(
+        ["manage_users"],
+        require_owner=True,
+        owner_id_field="user_id"
+    ))],
     responses={
         404: {
             "description": "Not Found - Profile not found.",

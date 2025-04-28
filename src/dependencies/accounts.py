@@ -1,11 +1,17 @@
-# src/dependencies/password_reset_token_service.py
+import logging
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.config.settings import Settings
 from src.database import get_db
 from src.config.dependencies import get_jwt_auth_manager, get_settings
-from src.repositories.accounts import ActivationTokenRepository, RefreshTokenRepository, UserRepository
-from src.repositories.profiles import ProfileRepository
+from src.repositories.accounts.accounts import (
+    UserRepository,
+    ActivationTokenRepository,
+    RefreshTokenRepository
+)
+from src.repositories.accounts.profiles import ProfileRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.services.auth.activation_token_service import ActivationTokenService
 from src.services.auth.admin_service import AdminService
@@ -14,8 +20,6 @@ from src.services.auth.registration_service import RegistrationService
 from src.services.auth.user_auth_service import UserAuthService
 from src.services.auth.user_service import UserService
 from src.services.emails import EmailSenderService
-import logging
-
 from src.services.profiles.profile_service import ProfileService
 from src.services.validation.user_validation_service import UserValidationService
 
@@ -48,15 +52,21 @@ def get_email_service(settings: Settings = Depends(get_settings)) -> EmailSender
         logger.error(f"Failed to create EmailSenderService: {e}", exc_info=True)
         raise
 
-def get_token_repository(db: AsyncSession = Depends(get_db)) -> ActivationTokenRepository:
+def get_token_repository(
+        db: AsyncSession = Depends(get_db)
+) -> ActivationTokenRepository:
     logger.info("Creating ActivationTokenRepository instance")
     return ActivationTokenRepository(db)
 
-def user_validation_service(user_rep: UserRepository = Depends(get_user_repository)) -> UserValidationService:
+def user_validation_service(
+        user_rep: UserRepository = Depends(get_user_repository)
+) -> UserValidationService:
     logger.info("Creating UserValidationService instance")
     return UserValidationService(user_rep)
 
-def get_refresh_token_repository(db: AsyncSession = Depends(get_db)) -> RefreshTokenRepository:
+def get_refresh_token_repository(
+        db: AsyncSession = Depends(get_db)
+) -> RefreshTokenRepository:
     logger.info("Creating RefreshTokenRepository instance")
     return RefreshTokenRepository(db)
 

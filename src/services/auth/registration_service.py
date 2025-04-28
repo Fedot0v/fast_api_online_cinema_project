@@ -6,11 +6,11 @@ from src.database import UserModel
 from src.repositories.accounts import UserRepository
 from src.services.auth.activation_token_service import ActivationTokenService
 from src.services.validation.user_validation_service import UserValidationService
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.emails import EmailSenderService
 
 
-class RegistrationService(BaseAccountService):
+class RegistrationService(BaseService):
     def __init__(
             self,
             user_repository: UserRepository,

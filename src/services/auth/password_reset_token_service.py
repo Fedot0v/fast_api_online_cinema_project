@@ -10,13 +10,13 @@ from src.repositories.accounts import (
     UserRepository,
     PasswordResetTokenRepository
 )
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.emails import EmailSenderService
 
 logger = logging.getLogger(__name__)
 
 
-class PasswordResetTokenService(BaseAccountService):
+class PasswordResetTokenService(BaseService):
     def __init__(
             self,
             db: AsyncSession,

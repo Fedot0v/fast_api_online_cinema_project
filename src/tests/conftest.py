@@ -115,3 +115,5 @@ async def expired_activation_token(db_session, registered_user):
     await db_session.commit()
     await db_session.refresh(token)
     return token
+
+

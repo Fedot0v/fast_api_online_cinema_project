@@ -8,11 +8,11 @@ from sqlalchemy import select
 from src.database import UserProfileModel
 from src.database.models.accounts import GenderEnum
 from src.exceptions.profiles import ProfileNotFoundError, ProfileCreationError, ProfileUpdateError
-from src.repositories.base import BaseAccountRepository
+from src.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
 
-class ProfileRepository(BaseAccountRepository):
+class ProfileRepository(BaseRepository):
     def __init__(self, db: AsyncSession):
         super().__init__(db)
 

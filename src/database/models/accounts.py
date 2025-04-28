@@ -119,6 +119,32 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    movie_likes: Mapped[List["MovieLikeModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    movie_ratings: Mapped[List["MovieRatingModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    movie_comments: Mapped[List["MovieCommentModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    movie_favorites: Mapped[List["MovieFavoriteModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    notifications: Mapped[List["NotificationModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="[NotificationModel.user_id]"
+    )
+    notifications_trigger: Mapped[List["NotificationModel"]] = relationship(
+        back_populates="trigger_user",
+        cascade="all, delete-orphan",
+        foreign_keys="[NotificationModel.trigger_user_id]"
+    )
 
     def __repr__(self):
         return (f"<UserModel(id={self.id}, email={self.email}, "
