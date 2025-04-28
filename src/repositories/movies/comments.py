@@ -18,29 +18,23 @@ class CommentsRepository(BaseRepository):
             user_id: int,
             movie_id: int,
             content: str,
-            # parent_comment_id: Optional[int] = None
+            parent_comment_id: Optional[int] = None
     ) -> MovieCommentModel:
-        # if parent_comment_id:
-        #     parent = await self.repo.get_comment_by_id(parent_comment_id)
-        #     if not parent:
-        #         raise ValueError("Parent comment does not exist")
-        #
-        #     if parent.parent_comment_id:
-        #         grandparent = await self.repo.get_comment_by_id(parent.parent_comment_id)
-        #         if grandparent and grandparent.parent_comment_id:
-        #             raise ValueError("Maximum depth of replies is 2") #TODO service layer
-
         comment = MovieCommentModel(
             user_id=user_id,
             movie_id=movie_id,
-            content=content
+            content=content,
+            parent_comment_id=parent_comment_id
         )
         self.db.add(comment)
         await self.db.commit()
         await self.db.refresh(comment)
         return comment
 
-    async def get_comment_by_id(self, comment_id: int) -> Optional[MovieCommentModel]:
+    async def get_comment_by_id(
+            self,
+            comment_id: int
+    ) -> Optional[MovieCommentModel]:
         stmt = (
             select(MovieCommentModel)
             .where(MovieCommentModel.id == comment_id)
@@ -52,28 +46,29 @@ class CommentsRepository(BaseRepository):
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
-    async def get_comments(
-        self,
-        movie_id: int,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None
+    async def get_movie_comments(
+            self,
+            movie_id: int
     ) -> Sequence[MovieCommentModel]:
         stmt = (
             select(MovieCommentModel)
-            .where(MovieCommentModel.movie_id == movie_id)
+            .where(
+                MovieCommentModel.movie_id == movie_id,
+                MovieCommentModel.parent_comment_id.is_(None)
+            )
             .options(
-            joinedload(MovieCommentModel.user)
-            .joinedload(UserModel.profile)
+                joinedload(MovieCommentModel.user),
+                joinedload(MovieCommentModel.parent)
+                .joinedload(MovieCommentModel.user),
+                joinedload(MovieCommentModel.likes)
             )
         )
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        if offset is not None:
-            stmt = stmt.offset(offset)
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
     async def delete_comment(self, comment_id: int) -> None:
-        stmt = delete(MovieCommentModel).where(MovieCommentModel.id == comment_id)
+        stmt = delete(MovieCommentModel).where(
+            MovieCommentModel.id == comment_id
+        )
         await self.db.execute(stmt)
         await self.db.commit()
