@@ -7,11 +7,11 @@ from src.database import ActivationTokenModel, UserModel
 from src.repositories.accounts import ActivationTokenRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.services.auth.user_service import UserService
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.emails import EmailSenderService
 
 
-class ActivationTokenService(BaseAccountService):
+class ActivationTokenService(BaseService):
     def __init__(
             self,
             db: AsyncSession,
