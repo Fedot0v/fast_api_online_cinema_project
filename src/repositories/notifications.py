@@ -4,7 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from src.database.models.notifications import NotificationModel, NotificationType
+from src.database.models.notifications import (
+    NotificationModel,
+    NotificationType
+)
 from src.repositories.base import BaseRepository
 
 
@@ -30,7 +33,10 @@ class NotificationRepository(BaseRepository):
         await self.db.refresh(notification)
         return notification
 
-    async def get_user_notifications(self, user_id: int) -> Sequence[NotificationModel]:
+    async def get_user_notifications(
+            self,
+            user_id: int
+    ) -> Sequence[NotificationModel]:
         stmt = (
             select(NotificationModel)
             .where(NotificationModel.user_id == user_id)
