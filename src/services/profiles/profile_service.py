@@ -1,13 +1,12 @@
 import logging
 import uuid
 from pathlib import Path
-from typing import cast
 
 from fastapi import HTTPException, UploadFile
 
 from src.database import UserProfileModel
 from src.exceptions.profiles import ProfileCreationError, ProfileNotFoundError, ProfileUpdateError
-from src.repositories.profiles import ProfileRepository
+from src.repositories.accounts.profiles import ProfileRepository
 from src.schemas.accounts import ProfileCreateSchema, UpdateProfileSchema
 
 logger = logging.getLogger(__name__)

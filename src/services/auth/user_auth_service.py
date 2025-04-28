@@ -8,14 +8,14 @@ from src.database import RefreshTokenModel
 from src.repositories.accounts import UserRepository, RefreshTokenRepository
 from src.schemas.accounts import MessageSchema
 from src.security.interfaces import JWTAuthManagerInterface
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.validation.user_validation_service import UserValidationService
 
 
 logger = logging.getLogger(__name__)
 
 
-class UserAuthService(BaseAccountService):
+class UserAuthService(BaseService):
     def __init__(
             self,
             user_repository: UserRepository,
