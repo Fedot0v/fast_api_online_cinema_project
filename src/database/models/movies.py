@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import Integer, String, ForeignKey, Float, DECIMAL, Text, UniqueConstraint, DateTime, func, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, MANYTOMANY, relationship, validates
@@ -180,7 +180,8 @@ class MovieModel(Base):
     )
     uuid: Mapped[UUID] = mapped_column(
         unique=True,
-        nullable=False
+        nullable=False,
+        default=uuid4
     )
     title: Mapped[str] = mapped_column(
         String(255),
@@ -298,7 +299,7 @@ class MovieCommentModel(Base):
         Integer,
         ForeignKey(
             "comments.id",
-            ondelete="CASCADE"
+            ondelete="SET NULL"
         ),
         nullable=True
     )
