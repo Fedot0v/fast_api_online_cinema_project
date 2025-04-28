@@ -145,6 +145,11 @@ class UserModel(Base):
         cascade="all, delete-orphan",
         foreign_keys="[NotificationModel.trigger_user_id]"
     )
+    cart: Mapped["CartModel"] = relationship(
+        "Carts",
+        back_populates="user",
+        uselist=False
+    )
 
     def __repr__(self):
         return (f"<UserModel(id={self.id}, email={self.email}, "
