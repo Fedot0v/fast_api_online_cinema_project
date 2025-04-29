@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -211,7 +212,7 @@ class MovieModel(Base):
         Text,
         nullable=False
     )
-    price: Mapped[float] = mapped_column(
+    price: Mapped[Decimal] = mapped_column(
         DECIMAL(10, 2),
         nullable=False
     )
@@ -274,6 +275,12 @@ class MovieModel(Base):
         "CartItems",
         back_populates="movie",
         cascade="all, delete-orphan"
+    )
+    order_items: Mapped[List["OrderItems"]] = relationship(
+        "OrderItems",
+        back_populates="movie",
+        cascade="all, delete-orphan",
+        lazy="selectin"
     )
 
 

@@ -150,6 +150,11 @@ class UserModel(Base):
         back_populates="user",
         uselist=False
     )
+    orders: Mapped[list["Orders"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
 
     def __repr__(self):
         return (f"<UserModel(id={self.id}, email={self.email}, "
