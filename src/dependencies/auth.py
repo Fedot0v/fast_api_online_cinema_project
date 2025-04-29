@@ -6,15 +6,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import get_jwt_auth_manager
-from src.database import get_db, UserGroupModel, UserGroupEnum, UserProfileModel
+from src.database import get_db, UserGroupModel, UserProfileModel
 from src.database.models.movies import MovieCommentModel, MovieFavoriteModel
 from src.dependencies.accounts import get_user_repository
 from src.exceptions.security import TokenExpiredError, InvalidTokenError
-from src.repositories.accounts import UserRepository
+from src.repositories.accounts.accounts import UserRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.security.permissions import GROUP_PERMISSIONS
 
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/accounts/login")
+
 
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
