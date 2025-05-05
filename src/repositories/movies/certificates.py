@@ -1,5 +1,6 @@
 from typing import Optional
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -22,3 +23,8 @@ class CertificationRepository(BaseRepository):
         await self.db.commit()
         await self.db.refresh(certification)
         return certification
+
+    async def delete_certification(self, certification_id: int) -> None:
+        stmt = delete(CertificationModel).where(CertificationModel.id == certification_id)
+        await self.db.execute(stmt)
+        await self.db.commit()

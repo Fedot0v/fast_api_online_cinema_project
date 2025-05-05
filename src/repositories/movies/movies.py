@@ -3,6 +3,7 @@ from typing import List, Sequence, Optional, Dict
 from sqlalchemy import select, desc, asc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from src.database.models.movies import (
     MovieModel,
@@ -16,14 +17,11 @@ from src.database.models.movies import (
 )
 from src.database.utils import normalize_name
 from src.repositories.base import BaseRepository
-from src.schemas.movies import MovieBase
+from src.schemas.movies import MovieBase, MovieCreateSchema
 
 
 class MovieRepository(BaseRepository):
-    def __init__(
-            self,
-            db: AsyncSession
-    ):
+    def __init__(self, db: AsyncSession):
         super().__init__(db)
 
     async def get_movies(
@@ -33,7 +31,11 @@ class MovieRepository(BaseRepository):
             sort_by: Optional[str] = None,
             sort_order: str = "asc"
     ) -> Sequence[MovieModel]:
-        stmt = select(MovieModel)
+        stmt = select(MovieModel).options(
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.directors),
+            joinedload(MovieModel.stars)
+        )
         if sort_by:
             sort_attr = getattr(MovieModel, sort_by, None)
             if sort_attr is None:
@@ -43,12 +45,16 @@ class MovieRepository(BaseRepository):
             )
         stmt = stmt.offset(skip).limit(limit)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return result.unique().scalars().all()
 
     async def get_movie_by_id(self, movie_id: int) -> MovieModel:
-        stmt = select(MovieModel).where(MovieModel.id == movie_id)
+        stmt = select(MovieModel).where(MovieModel.id == movie_id).options(
+            joinedload(MovieModel.genres),  # Загрузка жанров
+            joinedload(MovieModel.directors),  # Загрузка режиссеров
+            joinedload(MovieModel.stars)  # Загрузка актеров
+        )
         result = await self.db.execute(stmt)
-        return result.scalars().first()
+        return result.unique().scalars().first()
 
     async def filter_movies(
             self,
@@ -58,7 +64,11 @@ class MovieRepository(BaseRepository):
             limit: Optional[int] = None,
             offset: Optional[int] = None
     ) -> Sequence[MovieModel]:
-        stmt = select(MovieModel)
+        stmt = select(MovieModel).options(
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.directors),
+            joinedload(MovieModel.stars)
+        )
         if filters:
             if "year" in filters:
                 stmt = stmt.where(MovieModel.year == filters["year"])
@@ -85,8 +95,9 @@ class MovieRepository(BaseRepository):
             stmt = stmt.limit(limit)
         if offset is not None:
             stmt = stmt.offset(offset)
+
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return result.unique().scalars().all()
 
     async def search_movies(
             self,
@@ -97,18 +108,12 @@ class MovieRepository(BaseRepository):
     ) -> Sequence[MovieModel]:
         """
         Search movies by multiple criteria (title, description, actor, director, genre).
-
-        Args:
-            search_criteria: Dict with search criteria (e.g., {"actor": "Tom Cruise", "director": "Christopher Nolan"}).
-                             Supported keys: "title", "description", "actor", "director", "genre".
-            partial_match: If True, use partial matching (contains); otherwise, exact matching.
-            limit: Maximum number of results to return.
-            offset: Number of results to skip (for pagination).
-
-        Returns:
-            Sequence of MovieModel objects.
         """
-        stmt = select(MovieModel).distinct()
+        stmt = select(MovieModel).distinct().options(
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.directors),
+            joinedload(MovieModel.stars)
+        )
 
         if search_criteria:
             valid_criteria = {
@@ -209,21 +214,18 @@ class MovieRepository(BaseRepository):
             stmt = stmt.offset(offset)
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return result.unique().scalars().all()
 
-    async def get_certification_by_id(
-            self,
-            certification_id: int
-    ) -> Optional[CertificationModel]:
+    async def get_certification_by_id(self, certification_id: int) -> Optional[CertificationModel]:
         stmt = select(CertificationModel).where(
             CertificationModel.id == certification_id
         )
         result = await self.db.execute(stmt)
-        return result.scalars().first()
+        return result.unique().scalars().first()
 
     async def create_movie(
             self,
-            movie_data: MovieBase,
+            movie_data: MovieCreateSchema,
             genre_ids: List[int],
             director_ids: List[int],
             star_ids: List[int]
