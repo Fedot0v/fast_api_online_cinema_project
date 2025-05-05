@@ -1,5 +1,6 @@
-from typing import List, Optional, Sequence
-from fastapi import APIRouter, Depends, Query, status
+from typing import List, Optional, Sequence, Dict
+from fastapi import APIRouter, Depends, Query, status, HTTPException, Path
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import UserModel
 from src.dependencies.auth import get_current_user, require_permissions
 from src.dependencies.movies import (
@@ -8,32 +9,43 @@ from src.dependencies.movies import (
     get_favorite_service,
     get_rating_service
 )
+from src.database.session_sqlite import get_db
+from src.schemas.accounts import MessageSchema
 from src.schemas.movies import (
-    MovieBase,
     MovieDetail,
     MovieQuery,
     CommentResponseSchema,
     CommentCreateSchema,
     RatingResponse,
-    RatingCreate
+    RatingCreate,
+    MovieCreateSchema,
+    FavoriteResponseSchema,
 )
 from src.services.movies.comments_service import CommentsService
 from src.services.movies.favorites_service import FavoriteService
 from src.services.movies.movie_service import MovieService
 from src.services.movies.rating_service import RatingService
 
+
 router = APIRouter(prefix="/movies", tags=["movies"])
+
 
 @router.post(
     "/",
     response_model=MovieDetail,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new movie",
-    description="Create a new movie in the database with details such as title, year, and price. Requires 'write' permission.",
+    description=(
+        "Create a new movie in the database with details such as title, year, and price. "
+        "Requires 'write' permission."
+    ),
     dependencies=[Depends(require_permissions(["write"]))],
     responses={
         400: {
-            "description": "Bad Request - Invalid data or integrity error (e.g., duplicate movie title).",
+            "description": (
+                "Bad Request - Invalid data or integrity error "
+                "(e.g., duplicate movie title)."
+            ),
             "content": {
                 "application/json": {
                     "examples": {
@@ -54,36 +66,26 @@ router = APIRouter(prefix="/movies", tags=["movies"])
             }
         },
         500: {
-            "description": "Internal Server Error - An error occurred during movie creation.",
+            "description": (
+                "Internal Server Error - An error occurred during movie creation."
+            ),
             "content": {
                 "application/json": {
-                    "example": {"detail": "An error occurred during movie creation."}
+                    "example": {
+                        "detail": "An error occurred during movie creation."
+                    }
                 }
             }
         }
     }
 )
 async def create_movie(
-    movie_data: MovieBase,
+    movie_data: MovieCreateSchema,
     movie_service: MovieService = Depends(get_movie_service)
 ) -> MovieDetail:
     movie = await movie_service.create_movie(movie_data)
-    return MovieDetail(
-        id=movie.id,
-        title=movie.title,
-        year=movie.year,
-        time=movie.time,
-        imdb=movie.imdb,
-        meta_score=movie.meta_score,
-        gross=movie.gross,
-        description=movie.description,
-        price=movie.price,
-        certification_id=movie.certification_id,
-        average_rating=0.0,
-        genres=[genre.name for genre in movie.genres],
-        directors=[director.name for director in movie.directors],
-        stars=[star.name for star in movie.stars]
-    )
+    return MovieDetail.model_validate(movie)
+
 
 @router.get(
     "/",
@@ -377,22 +379,24 @@ async def get_movie_comments(
 async def create_comment(
     movie_id: int,
     comment_data: CommentCreateSchema,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     service: CommentsService = Depends(get_comment_service)
 ) -> CommentResponseSchema:
     comment = await service.create_comment(
         movie_id=movie_id,
-        user_id=current_user.id,
+        user_id=current_user["user_id"],
         comment_data=comment_data
     )
     return CommentResponseSchema.model_validate(comment)
 
+
 @router.delete(
     "/{movie_id}/comments/{comment_id}",
     status_code=status.HTTP_200_OK,
+    response_model=MessageSchema,
     summary="Delete a comment",
     description="Delete a comment for a movie. Requires 'delete' permission and ownership, or admin privileges.",
-    dependencies=[Depends(require_permissions(["delete"], require_owner=True))],
+    dependencies=[Depends(require_permissions(["delete"]))],
     responses={
         200: {
             "description": "Successful Response - Comment deleted successfully.",
@@ -440,20 +444,72 @@ async def create_comment(
 async def delete_comment(
     movie_id: int,
     comment_id: int,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     service: CommentsService = Depends(get_comment_service)
 ):
     await service.delete_comment(
         movie_id=movie_id,
         comment_id=comment_id,
-        user_id=current_user.id,
-        user_group=current_user.group
+        user_id=current_user["user_id"],
+        user_group=current_user["group_id"]
     )
-    return {"message": "Comment deleted successfully"}
+    return MessageSchema(message="Comment deleted successfully")
+
+
+@router.get(
+    "/my/favorites",
+    response_model=List[FavoriteResponseSchema],
+    summary="Get user's favorite movies",
+    description="Retrieve a list of the user's favorite movies, including average ratings, genres, directors, and stars. Requires 'read' permission.",
+    dependencies=[Depends(require_permissions(["read"]))],
+    responses={
+        200: {
+            "description": "Successful Response - List of favorite movies with average ratings.",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "title": "Inception",
+                            "year": 2010,
+                            "time": 148,
+                            "imdb": 8.8,
+                            "meta_score": 74.0,
+                            "gross": 829895144.0,
+                            "description": "A thief who steals corporate secrets...",
+                            "price": 9.99,
+                            "certification_id": 1,
+                            "average_rating": 8.5,
+                            "genres": ["Sci-Fi", "Thriller"],
+                            "directors": ["Christopher Nolan"],
+                            "stars": ["Leonardo DiCaprio", "Joseph Gordon-Levitt"]
+                        }
+                    ]
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred while retrieving favorites.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred while retrieving favorites."}
+                }
+            }
+        }
+    }
+)
+async def get_user_favorites(
+    user: dict = Depends(get_current_user),
+    favorite_service: FavoriteService = Depends(get_favorite_service),
+) -> Sequence[FavoriteResponseSchema]:
+    favorites = await favorite_service.get_user_favorites(user["user_id"])
+    return [FavoriteResponseSchema.model_validate(fav) for fav in favorites]
+
 
 @router.post(
     "/{movie_id}/favorites",
     status_code=status.HTTP_201_CREATED,
+    response_model=MessageSchema,
     summary="Add movie to favorites",
     description="Add a movie to the user's favorites list. Requires 'write' permission.",
     dependencies=[Depends(require_permissions(["write"]))],
@@ -503,11 +559,11 @@ async def delete_comment(
 )
 async def add_favorite(
     movie_id: int,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     favorite_service: FavoriteService = Depends(get_favorite_service)
 ):
-    await favorite_service.add_favorite(user.id, movie_id)
-    return {"detail": "Movie added to favorites"}
+    await favorite_service.add_favorite(user["user_id"], movie_id)
+    return MessageSchema(message="Movie added to favorites")
 
 @router.delete(
     "/{movie_id}/favorites",
@@ -548,10 +604,10 @@ async def add_favorite(
 )
 async def remove_favorite(
     movie_id: int,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     favorite_service: FavoriteService = Depends(get_favorite_service)
 ):
-    await favorite_service.remove_favorite(user.id, movie_id)
+    await favorite_service.remove_favorite(user["user_id"], movie_id)
 
 @router.get(
     "/{movie_id}/favorites/status",
@@ -588,60 +644,11 @@ async def remove_favorite(
 )
 async def check_favorite(
     movie_id: int,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     favorite_service: FavoriteService = Depends(get_favorite_service)
 ) -> bool:
-    return await favorite_service.check_favorite(user.id, movie_id)
+    return await favorite_service.check_favorite(user["user_id"], movie_id)
 
-@router.get(
-    "/favorites",
-    response_model=List[MovieDetail],
-    summary="Get user's favorite movies",
-    description="Retrieve a list of the user's favorite movies, including average ratings, genres, directors, and stars. Requires 'read' permission.",
-    dependencies=[Depends(require_permissions(["read"]))],
-    responses={
-        200: {
-            "description": "Successful Response - List of favorite movies with average ratings.",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "title": "Inception",
-                            "year": 2010,
-                            "time": 148,
-                            "imdb": 8.8,
-                            "meta_score": 74.0,
-                            "gross": 829895144.0,
-                            "description": "A thief who steals corporate secrets...",
-                            "price": 9.99,
-                            "certification_id": 1,
-                            "average_rating": 8.5,
-                            "genres": ["Sci-Fi", "Thriller"],
-                            "directors": ["Christopher Nolan"],
-                            "stars": ["Leonardo DiCaprio", "Joseph Gordon-Levitt"]
-                        }
-                    ]
-                }
-            }
-        },
-        500: {
-            "description": "Internal Server Error - An error occurred while retrieving favorites.",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "An error occurred while retrieving favorites."}
-                }
-            }
-        }
-    }
-)
-async def get_user_favorites(
-    user: UserModel = Depends(get_current_user),
-    favorite_service: FavoriteService = Depends(get_favorite_service),
-    movie_service: MovieService = Depends(get_movie_service)
-) -> Sequence[MovieDetail]:
-    favorites = await favorite_service.get_user_favorites(user.id)
-    return await movie_service.enrich_movies(favorites)
 
 @router.get(
     "/{movie_id}/ratings",
@@ -687,10 +694,10 @@ async def get_user_favorites(
 )
 async def get_user_rating(
     movie_id: int,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     rating_service: RatingService = Depends(get_rating_service)
 ) -> Optional[RatingResponse]:
-    rating = await rating_service.get_user_rating(user.id, movie_id)
+    rating = await rating_service.get_user_rating(user["user_id"], movie_id)
     if not rating:
         return None
     return RatingResponse(
@@ -757,10 +764,10 @@ async def get_user_rating(
 async def create_or_update_rating(
     movie_id: int,
     rating_data: RatingCreate,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     rating_service: RatingService = Depends(get_rating_service)
 ) -> RatingResponse:
-    rating = await rating_service.create_or_update_rating(user.id, movie_id, rating_data.rating)
+    rating = await rating_service.create_or_update_rating(user["user_id"], movie_id, rating_data.rating)
     return RatingResponse(
         rating=rating.rating,
         movie_id=rating.movie_id,
@@ -806,7 +813,7 @@ async def create_or_update_rating(
 )
 async def delete_rating(
     movie_id: int,
-    user: UserModel = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     rating_service: RatingService = Depends(get_rating_service)
 ):
-    await rating_service.delete_rating(user.id, movie_id)
+    await rating_service.delete_rating(user["user_id"], movie_id)

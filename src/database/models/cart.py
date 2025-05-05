@@ -23,13 +23,13 @@ class CartModel(Base):
         nullable=False,
         unique=True
     )
-    user: Mapped["Users"] = relationship(
-        "Users",
+    user: Mapped["UserModel"] = relationship(
+        "UserModel",
         back_populates="cart",
         uselist=False
     )
     cart_items: Mapped[List["CartItemsModel"]] = relationship(
-        "CartItems",
+        "CartItemsModel",
         back_populates="cart",
         cascade="all, delete-orphan"
     )
@@ -63,11 +63,11 @@ class CartItemsModel(Base):
     )
 
     cart: Mapped["CartModel"] = relationship(
-        "Carts",
+        "CartModel",
         back_populates="cart_items"
     )
-    movie: Mapped["Movies"] = relationship(
-        "Movies",
+    movie: Mapped["MovieModel"] = relationship(
+        "MovieModel",
         back_populates="cart_items"
     )
 

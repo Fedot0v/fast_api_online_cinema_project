@@ -1,12 +1,16 @@
-from datetime import date
 from typing import Type, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, delete, update
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
-from src.database.models.accounts import UserModel, GenderEnum, UserProfileModel, RefreshTokenModel, ActivationTokenModel, \
-    PasswordResetTokenModel, TokenBaseModel
+from src.database.models.accounts import (
+    UserModel,
+    RefreshTokenModel,
+    ActivationTokenModel,
+    PasswordResetTokenModel,
+    TokenBaseModel
+)
 from src.repositories.base import BaseRepository
 
 
@@ -27,7 +31,8 @@ class UserRepository(BaseRepository):
         return result.scalars().first()
 
     async def get_user_by_id(self, user_id: int) -> UserModel | None:
-        stmt = select(UserModel).where(UserModel.id == user_id)
+        stmt = select(UserModel).where(UserModel.id == user_id).options(
+            selectinload(UserModel.group))
         result = await self.db.execute(stmt)
         return result.scalars().first()
 

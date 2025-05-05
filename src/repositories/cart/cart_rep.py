@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,6 +15,9 @@ from src.exceptions.cart import (
     CartNotFoundError
 )
 from src.repositories.base import BaseRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class CartRepository(BaseRepository):
@@ -72,31 +76,63 @@ class CartRepository(BaseRepository):
 
     async def add_movie(self, user_id: int, movie_id: int) -> CartItemsModel:
         """Add a movie to the user's cart. Create cart if it doesn't exist."""
-        movie = await self.db.get(MovieModel, movie_id)
-        if not movie:
-            raise MovieNotFoundError(movie_id)
-        cart = await (
-            self.get_by_user_id(user_id)
-        ) if await self.exists(user_id) else await self._create(user_id)
-        if await self.item_exists(cart.id, movie_id):
-            raise MovieAlreadyInCartError(movie_id)
-        cart_item = CartItemsModel(cart_id=cart.id, movie_id=movie_id)
-        self.db.add(cart_item)
-        await self.db.commit()
-        await self.db.refresh(cart_item)
-        return cart_item
+        try:
+            movie = await self.db.get(MovieModel, movie_id)
+            if not movie:
+                raise MovieNotFoundError(movie_id)
+
+            cart = await (
+                self.get_by_user_id(user_id)
+            ) if await self.exists(user_id) else await self._create(user_id)
+
+            if await self.item_exists(cart.id, movie_id):
+                raise MovieAlreadyInCartError(movie_id)
+
+            cart_item = CartItemsModel(cart_id=cart.id, movie_id=movie_id)
+            self.db.add(cart_item)
+            await self.db.flush()
+
+            stmt = (
+                select(CartItemsModel)
+                .where(CartItemsModel.id == cart_item.id)
+                .options(selectinload(CartItemsModel.movie))
+            )
+            result = await self.db.execute(stmt)
+            cart_item = result.scalars().first()
+
+            await self.db.commit()
+            return cart_item
+
+        except (MovieNotFoundError, CartNotFoundError, MovieAlreadyInCartError):
+            await self.db.rollback()
+            raise
+
+        except Exception as e:
+            logger.error(f"Error adding movie to cart: {str(e)}", exc_info=True)
+            await self.db.rollback()
+            raise
 
     async def remove_movie(self, user_id: int, movie_id: int) -> CartItemsModel:
         """Remove a movie from the user's cart. Return removed item."""
-        cart = await self.get_by_user_id(user_id)
-        stmt = select(CartItemsModel).where(
-            CartItemsModel.cart_id == cart.id,
-            CartItemsModel.movie_id == movie_id
-        ).options(selectinload(CartItemsModel.movie))
-        result = await self.db.execute(stmt)
-        cart_item = result.scalar_one_or_none()
-        if not cart_item:
-            raise MovieNotInCartError(movie_id)
-        await self.db.delete(cart_item)
-        await self.db.commit()
-        return cart_item
+        try:
+            cart = await self.get_by_user_id(user_id)
+            stmt = select(CartItemsModel).where(
+                CartItemsModel.cart_id == cart.id,
+                CartItemsModel.movie_id == movie_id
+            ).options(selectinload(CartItemsModel.movie))
+            result = await self.db.execute(stmt)
+            cart_item = result.scalar_one_or_none()
+            if not cart_item:
+                raise MovieNotInCartError(movie_id)
+            await self.db.delete(cart_item)
+            await self.db.commit()
+            return cart_item
+
+        except (CartNotFoundError, MovieNotInCartError):
+            await self.db.rollback()
+            raise
+
+        except Exception as e:
+            logger.error(f"Error removing movie from cart: {str(e)}", exc_info=True)
+            await self.db.rollback()
+            raise

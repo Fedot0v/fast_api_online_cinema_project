@@ -58,13 +58,12 @@ class CommentsRepository(BaseRepository):
             )
             .options(
                 joinedload(MovieCommentModel.user),
-                joinedload(MovieCommentModel.parent)
-                .joinedload(MovieCommentModel.user),
-                joinedload(MovieCommentModel.likes)
+                joinedload(MovieCommentModel.likes),
+                joinedload(MovieCommentModel.replies)
             )
         )
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return result.unique().scalars().all()
 
     async def delete_comment(self, comment_id: int) -> None:
         stmt = delete(MovieCommentModel).where(
@@ -72,3 +71,19 @@ class CommentsRepository(BaseRepository):
         )
         await self.db.execute(stmt)
         await self.db.commit()
+
+    async def get_replies_for_comment(
+            self,
+            comment_id: int
+    ) -> Sequence[MovieCommentModel]:
+        stmt = (
+            select(MovieCommentModel)
+            .where(MovieCommentModel.parent_comment_id == comment_id)
+            .options(
+                joinedload(MovieCommentModel.user)
+                .joinedload(UserModel.profile),
+                joinedload(MovieCommentModel.likes)
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().all()

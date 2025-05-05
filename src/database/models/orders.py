@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import ForeignKey, Integer, DateTime, Enum, DECIMAL, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.database.models.base import Base
 
 
-class StatusEnum(str, enum.Enum):
+class OrderStatusEnum(str, enum.Enum):
     PENDING = "pending"
     PAID = "paid"
     CANCELED = "canceled"
@@ -38,9 +38,9 @@ class Orders(Base):
         server_default=func.now()
     )
     status: Mapped[str] = mapped_column(
-        Enum(StatusEnum),
+        Enum(OrderStatusEnum),
         nullable=False,
-        default=StatusEnum.PENDING
+        default=OrderStatusEnum.PENDING
     )
     total_amount: Mapped[Decimal] = mapped_column(
         DECIMAL(10, 2),
@@ -48,7 +48,12 @@ class Orders(Base):
     )
 
     user: Mapped["UserModel"] = relationship(back_populates="orders")
-    order_items: Mapped[list["OrderItem"]] = relationship(
+    order_items: Mapped[list["OrderItems"]] = relationship(
+        back_populates="order",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    payments: Mapped[List["Payment"]] = relationship(
         back_populates="order",
         cascade="all, delete-orphan",
         lazy="selectin"
@@ -85,3 +90,8 @@ class OrderItems(Base):
     )
     order: Mapped["Orders"] = relationship(back_populates="order_items")
     movie: Mapped["MovieModel"] = relationship(lazy="selectin")
+    payment_items: Mapped[List["PaymentItem"]] = relationship(
+        back_populates="order_item",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )

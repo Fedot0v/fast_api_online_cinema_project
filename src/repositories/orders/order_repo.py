@@ -2,14 +2,15 @@ from datetime import datetime
 from typing import Any, Type, Coroutine, Sequence, Optional, List
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models.orders import Orders, OrderItems, StatusEnum
+from src.database.models.orders import Orders, OrderItems, OrderStatusEnum
 from src.exceptions.orders import OrderNotFoundError
 from src.repositories.base import BaseRepository
 
 
 class OrderRepository(BaseRepository):
-    def __init__(self, db):
+    def __init__(self, db: AsyncSession):
         super().__init__(db)
 
     async def create_order(self, order: Orders) -> Orders:
@@ -18,7 +19,7 @@ class OrderRepository(BaseRepository):
         await self.db.refresh(order)
         return order
 
-    async def _check_order_exists(self, user_id: int, movie_id: int, status: StatusEnum) -> bool:
+    async def _check_order_exists(self, user_id: int, movie_id: int, status: OrderStatusEnum) -> bool:
         stmt = select(OrderItems).join(Orders).where(
             Orders.user_id == user_id,
             OrderItems.movie_id == movie_id,
@@ -28,10 +29,10 @@ class OrderRepository(BaseRepository):
         return bool(result.scalars().first())
 
     async def check_movie_purchased(self, user_id: int, movie_id: int) -> bool:
-        return await self._check_order_exists(user_id, movie_id, StatusEnum.PAID)
+        return await self._check_order_exists(user_id, movie_id, OrderStatusEnum.PAID)
 
     async def check_pending_order(self, user_id: int, movie_id: int) -> bool:
-        return await self._check_order_exists(user_id, movie_id, StatusEnum.PENDING)
+        return await self._check_order_exists(user_id, movie_id, OrderStatusEnum.PENDING)
 
     async def get_order_by_id(self, order_id: int) -> Type[Orders] | None:
         order = await self.db.get(Orders, order_id)
@@ -42,7 +43,7 @@ class OrderRepository(BaseRepository):
     async def update_order_status(
             self,
             order_id: int,
-            status: StatusEnum
+            status: OrderStatusEnum
     ) -> Type[Orders] | None:
         order = await self.get_order_by_id(order_id)
         order.status = status
@@ -60,7 +61,7 @@ class OrderRepository(BaseRepository):
             user_id: Optional[int] = None,
             date_from: Optional[datetime] = None,
             date_to: Optional[datetime] = None,
-            status: Optional[StatusEnum] = None
+            status: Optional[OrderStatusEnum] = None
     ) -> Sequence[Orders]:
         query = select(Orders)
 

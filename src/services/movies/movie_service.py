@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, List, Sequence
 from fastapi import HTTPException
 from src.database.models.movies import MovieModel
@@ -7,7 +8,8 @@ from src.repositories.movies.genres import GenreRepository
 from src.repositories.movies.movies import MovieRepository
 from src.repositories.movies.ratings import RatingsRepository
 from src.repositories.movies.stars import StarRepository
-from src.schemas.movies import MovieBase, MovieDetail, MovieQuery
+from src.schemas.movies import MovieBase, MovieDetail, MovieQuery, MovieCreateSchema
+
 
 class MovieService:
     def __init__(
@@ -157,152 +159,177 @@ class MovieService:
             raise HTTPException(status_code=404, detail="Movie not found")
         return (await self._enrich_movies_with_ratings([movie]))[0]
 
+    async def _apply_filters(self, movies: Sequence[MovieModel], filters: dict) -> Sequence[MovieModel]:
+        filtered_movies = []
+        for movie in movies:
+            if self._movie_matches_filters(movie, filters):
+                filtered_movies.append(movie)
+        return filtered_movies
+
+    def _movie_matches_filters(self, movie: MovieModel, filters: dict) -> bool:
+        if "year" in filters and movie.year != filters["year"]:
+            return False
+        if "year_min" in filters and movie.year < filters["year_min"]:
+            return False
+        if "year_max" in filters and movie.year > filters["year_max"]:
+            return False
+        if "imdb_min" in filters and movie.imdb < filters["imdb_min"]:
+            return False
+        if "imdb_max" in filters and movie.imdb > filters["imdb_max"]:
+            return False
+        if "price_min" in filters and movie.price < filters["price_min"]:
+            return False
+        if "price_max" in filters and movie.price > filters["price_max"]:
+            return False
+        return True
+
+    async def _apply_search(
+        self,
+        movies: Sequence[MovieModel],
+        search_criteria: dict,
+        partial_match: bool
+    ) -> Sequence[MovieModel]:
+        if not search_criteria:
+            return movies
+
+        result = []
+        for movie in movies:
+            if await self._movie_matches_search(movie, search_criteria, partial_match):
+                result.append(movie)
+        return result
+
+    async def _movie_matches_search(
+        self,
+        movie: MovieModel,
+        search_criteria: dict,
+        partial_match: bool
+    ) -> bool:
+        for criterion, value in search_criteria.items():
+            if criterion == "title":
+                if not self._text_matches(movie.title, value, partial_match):
+                    return False
+            elif criterion == "description":
+                if not self._text_matches(movie.description, value, partial_match):
+                    return False
+            elif criterion == "actor":
+                if not await self._actor_matches(movie, value, partial_match):
+                    return False
+            elif criterion == "director":
+                if not await self._director_matches(movie, value, partial_match):
+                    return False
+            elif criterion == "genre":
+                if not await self._genre_matches(movie, value, partial_match):
+                    return False
+        return True
+
+    def _text_matches(self, text: str, search_value: str, partial_match: bool) -> bool:
+        if partial_match:
+            return search_value.lower() in text.lower()
+        return search_value.lower() == text.lower()
+
+    async def _actor_matches(self, movie: MovieModel, actor_name: str, partial_match: bool) -> bool:
+        for star in movie.stars:
+            if self._text_matches(star.name, actor_name, partial_match):
+                return True
+        return False
+
+    async def _director_matches(self, movie: MovieModel, director_name: str, partial_match: bool) -> bool:
+        for director in movie.directors:
+            if self._text_matches(director.name, director_name, partial_match):
+                return True
+        return False
+
+    async def _genre_matches(self, movie: MovieModel, genre_name: str, partial_match: bool) -> bool:
+        for genre in movie.genres:
+            if self._text_matches(genre.name, genre_name, partial_match):
+                return True
+        return False
+
     async def query_movies(self, query: MovieQuery) -> Sequence[MovieDetail]:
-
-        if query.skip < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Skip cannot be negative"
-            )
-        if query.limit <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Limit must be greater than zero"
-            )
-        if query.sort_by and query.sort_by not in {
-            "title",
-            "year",
-            "imdb",
-            "price",
-            "popularity"
-        }:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid sort_by attribute: {query.sort_by}"
-            )
-        if query.sort_order not in ["asc", "desc"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Sort order must be 'asc' or 'desc'"
-            )
-        if query.filters:
-            valid_filters = {
-                "year",
-                "year_min",
-                "year_max",
-                "imdb_min",
-                "imdb_max",
-                "price_min",
-                "price_max"
-            }
-            invalid_filters = set(query.filters) - valid_filters
-            if invalid_filters:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid filters: {invalid_filters}"
-                )
-
-        filters = query.filters or {}
-        search_criteria = query.search_criteria or {}
+        # Валидация параметров
+        await self._validate_pagination(query.skip, query.limit)
+        await self._validate_sort(query.sort_by, query.sort_order)
+        await self._validate_filters(query.filters)
+        await self._validate_search_criteria(query.search_criteria)
 
         try:
-            if search_criteria and filters:
-                search_results = await self.movie_repository.search_movies(
-                    search_criteria=search_criteria,
-                    partial_match=query.partial_match,
-                    limit=None,
-                    offset=None
+            # Получаем базовый список фильмов с сортировкой
+            movies = await self.movie_repository.get_movies(
+                skip=query.skip,
+                limit=query.limit,
+                sort_by=query.sort_by,
+                sort_order=query.sort_order
+            )
+
+            # Применяем фильтры
+            if query.filters:
+                movies = await self._apply_filters(movies, query.filters)
+
+            # Применяем поиск
+            if query.search_criteria:
+                movies = await self._apply_search(
+                    movies,
+                    query.search_criteria,
+                    query.partial_match
                 )
-                movie_ids = [movie.id for movie in search_results]
-                if not movie_ids:
-                    return []
-                filters["ids"] = movie_ids
-                movies = await self.movie_repository.filter_movies(
-                    filters=filters,
-                    sort_by=query.sort_by,
-                    sort_order=query.sort_order,
-                    limit=query.limit,
-                    offset=query.skip
-                )
-            elif search_criteria:
-                movies = await self.movie_repository.search_movies(
-                    search_criteria=search_criteria,
-                    partial_match=query.partial_match,
-                    limit=query.limit,
-                    offset=query.skip
-                )
-            elif filters:
-                movies = await self.movie_repository.filter_movies(
-                    filters=filters,
-                    sort_by=query.sort_by,
-                    sort_order=query.sort_order,
-                    limit=query.limit,
-                    offset=query.skip
-                )
-            else:
-                movies = await self.movie_repository.get_movies(
-                    skip=query.skip,
-                    limit=query.limit,
-                    sort_by=query.sort_by,
-                    sort_order=query.sort_order
-                )
+
+            # Обогащаем данные рейтингами
             return await self._enrich_movies_with_ratings(movies)
+
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def create_movie(self, movie_data: MovieBase) -> MovieModel:
-        certification = await (
-            self.certification_repository
-            .get_certification_by_id(movie_data.certification_id)
-        )
+    async def create_movie(self, movie_data: MovieCreateSchema) -> MovieDetail:
+        certification = await self.certification_repository.get_certification_by_id(movie_data.certification_id)
         if not certification:
-            raise HTTPException(
-                status_code=404,
-                detail="Certification not found"
-            )
+            raise HTTPException(status_code=404, detail="Certification not found")
 
-        genre_ids = movie_data.genre_ids or []
-        for genre_id in genre_ids:
+        genres = movie_data.genre_ids or []
+        for genre_id in genres:
             if not await self.genre_repository.get_genre_by_id(genre_id):
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Genre with id {genre_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Genre with id {genre_id} not found")
 
-        director_ids = movie_data.director_ids or []
-        for director_id in director_ids:
-            if not await self.director_repository.get_director_by_id(
-                    director_id
-            ):
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Director with id {director_id} not found"
-                )
+        directors = movie_data.director_ids or []
+        for director_id in directors:
+            if not await self.director_repository.get_director_by_id(director_id):
+                raise HTTPException(status_code=404, detail=f"Director with id {director_id} not found")
 
-        star_ids = movie_data.star_ids or []
-        for star_id in star_ids:
+        stars = movie_data.star_ids or []
+        for star_id in stars:
             if not await self.star_repository.get_star_by_id(star_id):
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Star with id {star_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Star with id {star_id} not found")
 
         try:
-            movie = await (
-                self.movie_repository.create_movie(
-                    movie_data,
-                    genre_ids,
-                    director_ids,
-                    star_ids
-                )
+            movie = await self.movie_repository.create_movie(
+                movie_data,
+                genres,
+                directors,
+                stars
             )
             await self.movie_repository.db.commit()
-            return movie
+
+            genre_objs, director_objs, star_objs = await asyncio.gather(
+                asyncio.gather(*[self.genre_repository.get_genre_by_id(gid) for gid in genres]),
+                asyncio.gather(*[self.director_repository.get_director_by_id(did) for did in directors]),
+                asyncio.gather(*[self.star_repository.get_star_by_id(sid) for sid in stars]),
+            )
+
+            return MovieDetail(
+                id=movie.id,
+                title=movie.title,
+                year=movie.year,
+                time=movie.time,
+                imdb=movie.imdb,
+                meta_score=movie.meta_score,
+                gross=movie.gross,
+                description=movie.description,
+                price=movie.price,
+                certification_id=movie.certification_id,
+                genres=[g.name for g in genre_objs],
+                directors=[d.name for d in director_objs],
+                stars=[s.name for s in star_objs],
+                average_rating=0.0,
+            )
+
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-
-    async def enrich_movies(
-            self,
-            movies: Sequence[MovieModel]
-    ) -> Sequence[MovieDetail]:
-        return await self._enrich_movies_with_ratings(movies)

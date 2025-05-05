@@ -33,14 +33,17 @@ class BasePasswordSchema(BaseModel):
     ]
 
 
+class ChangeGroupRequest(BaseModel):
+    user_id: int
+    new_group_id: int
+
+
 class MessageSchema(BaseModel):
     message: str
 
 
 class BasePasswordEmailSchema(BaseEmailSchema, BasePasswordSchema):
-
     model_config = ConfigDict(from_attributes=True)
-
 
 
 class UserRegistrationSchema(BasePasswordEmailSchema):
@@ -50,7 +53,6 @@ class UserRegistrationSchema(BasePasswordEmailSchema):
 class UserRegistrationResponseSchema(BaseModel):
     id: int
     email: EmailStr
-
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -71,7 +73,7 @@ class AccessTokenSchema(BaseModel):
 
 
 class LoginResponseSchema(RefreshTokenSchema, AccessTokenSchema):
-   token_type: str
+    token_type: str
 
 
 class ProfileCreateSchema(BaseModel):
@@ -95,7 +97,7 @@ class ProfileCreateSchema(BaseModel):
         return cls(
             first_name=first_name,
             last_name=last_name,
-            gender=gender,
+            gender=GenderEnum(gender),
             date_of_birth=date_of_birth,
             info=info,
             avatar=avatar
@@ -120,7 +122,10 @@ class ProfileCreateSchema(BaseModel):
 
     @field_validator("avatar")
     @classmethod
-    def validate_avatar(cls, avatar: UploadFile) -> UploadFile:
+    def validate_avatar(cls, avatar: Optional[UploadFile]) -> Optional[UploadFile]:
+        if avatar is None:
+            return None
+
         try:
             validate_image(avatar)
             return avatar
@@ -196,13 +201,13 @@ class UpdateProfileSchema(BaseModel):
 
     @classmethod
     def from_form(
-            cls,
-            first_name: Optional[str] = Form(None),
-            last_name: Optional[str] = Form(None),
-            gender: Optional[GenderEnum] = Form(None),
-            date_of_birth: Optional[date] = Form(None),
-            info: Optional[str] = Form(None),
-            avatar: Optional[UploadFile] = File(None)
+        cls,
+        first_name: Optional[str] = Form(None),
+        last_name: Optional[str] = Form(None),
+        gender: Optional[GenderEnum] = Form(None),
+        date_of_birth: Optional[date] = Form(None),
+        info: Optional[str] = Form(None),
+        avatar: Optional[UploadFile] = File(None)
     ) -> "UpdateProfileSchema":
         return cls(
             first_name=first_name,
@@ -216,96 +221,96 @@ class UpdateProfileSchema(BaseModel):
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_name_field(cls, name: Optional[str], field) -> Optional[str]:
-        if name is not None:
-            try:
-                validate_name(name)
-                return name.lower()
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=[{
-                        "type": "value_error",
-                        "loc": ["first_name" if "first_name" in name else "last_name"],
-                        "msg": str(e),
-                        "input": name
-                    }]
-                )
-        return name
+        if name is None:
+            return None
+        try:
+            validate_name(name)
+            return name.lower()
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=[{
+                    "type": "value_error",
+                    "loc": [field.name],
+                    "msg": str(e),
+                    "input": name
+                }]
+            )
 
     @field_validator("avatar")
     @classmethod
     def validate_avatar(cls, avatar: Optional[UploadFile]) -> Optional[UploadFile]:
-        if avatar is not None:
-            try:
-                validate_image(avatar)
-                return avatar
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=[{
-                        "type": "value_error",
-                        "loc": ["avatar"],
-                        "msg": str(e),
-                        "input": avatar.filename
-                    }]
-                )
-        return avatar
+        if avatar is None:
+            return None
+        try:
+            validate_image(avatar)
+            return avatar
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["avatar"],
+                    "msg": str(e),
+                    "input": avatar.filename
+                }]
+            )
 
     @field_validator("gender")
     @classmethod
     def validate_gender_field(cls, gender: Optional[GenderEnum]) -> Optional[GenderEnum]:
-        if gender is not None:
-            try:
-                validate_gender(gender.value)
-                return gender
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=[{
-                        "type": "value_error",
-                        "loc": ["gender"],
-                        "msg": str(e),
-                        "input": gender
-                    }]
-                )
-        return gender
+        if gender is None:
+            return None
+        try:
+            validate_gender(gender)
+            return gender
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["gender"],
+                    "msg": str(e),
+                    "input": gender
+                }]
+            )
 
     @field_validator("date_of_birth")
     @classmethod
     def validate_date_of_birth(cls, date_of_birth: Optional[date]) -> Optional[date]:
-        if date_of_birth is not None:
-            try:
-                validate_birth_date(date_of_birth)
-                return date_of_birth
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=[{
-                        "type": "value_error",
-                        "loc": ["date_of_birth"],
-                        "msg": str(e),
-                        "input": str(date_of_birth)
-                    }]
-                )
-        return None
+        if date_of_birth is None:
+            return None
+        try:
+            validate_birth_date(date_of_birth)
+            return date_of_birth
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["date_of_birth"],
+                    "msg": str(e),
+                    "input": str(date_of_birth)
+                }]
+            )
 
     @field_validator("info")
     @classmethod
     def validate_info(cls, info: Optional[str]) -> Optional[str]:
-        if info is not None:
-            cleaned_info = info.strip()
-            if not cleaned_info:
-                raise HTTPException(
-                    status_code=422,
-                    detail=[{
-                        "type": "value_error",
-                        "loc": ["info"],
-                        "msg": "Info field cannot be empty or contain only spaces.",
-                        "input": info
-                    }]
-                )
-            return cleaned_info
-        return None
+        if info is None:
+            return None
+        cleaned_info = info.strip()
+        if not cleaned_info:
+            raise HTTPException(
+                status_code=422,
+                detail=[{
+                    "type": "value_error",
+                    "loc": ["info"],
+                    "msg": "Info field cannot be empty or contain only spaces.",
+                    "input": info
+                }]
+            )
+        return cleaned_info
 
 
 class ProfileResponseSchema(BaseModel):
@@ -316,4 +321,6 @@ class ProfileResponseSchema(BaseModel):
     gender: str
     date_of_birth: date
     info: str
-    avatar: HttpUrl
+    avatar: str | None
+
+    model_config = ConfigDict(from_attributes=True)

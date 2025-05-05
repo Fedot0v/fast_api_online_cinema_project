@@ -79,9 +79,9 @@ def get_movie_service(
 
 
 def get_comment_service(
-        comment_repo: CommentsRepository = Depends(CommentsRepository),
+        comment_repo: CommentsRepository = Depends(get_repository(CommentsRepository)),
         notification_repo: NotificationRepository = Depends(
-            NotificationRepository
+            get_repository(NotificationRepository)
         )
 ) -> CommentsService:
     return CommentsService(comment_repo, notification_repo)

@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 
-from src.repositories.accounts import UserRepository
+from src.repositories.accounts.accounts import UserRepository
 
 
 class UserValidationService:

@@ -3,6 +3,7 @@ from typing import Sequence, Optional
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.database.models.movies import MovieFavoriteModel, MovieModel
 from src.repositories.base import BaseRepository
@@ -65,13 +66,10 @@ class FavoriteRepository(BaseRepository):
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
-    async def get_user_favorites(
-            self,
-            user_id: int
-    ) -> Sequence[MovieModel]:
+    async def get_user_favorites(self, user_id: int) -> Sequence[MovieFavoriteModel]:
         stmt = (
-            select(MovieModel)
-            .join(MovieFavoriteModel)
+            select(MovieFavoriteModel)
+            .options(selectinload(MovieFavoriteModel.movie))
             .where(MovieFavoriteModel.user_id == user_id)
         )
         result = await self.db.execute(stmt)
