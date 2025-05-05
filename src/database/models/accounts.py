@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime, date, timezone, timedelta
+from pathlib import Path
 from typing import List, Optional
 
 from sqlalchemy import (
@@ -17,6 +18,17 @@ from src.database.models.base import Base
 from src.database.validators import accounts as validators
 from src.security.passwords import hash_password, verify_password
 from src.security.utils import generate_secure_token
+from src.database.models.movies import (
+    CommentLikeModel,
+    MovieLikeModel,
+    MovieRatingModel,
+    MovieCommentModel,
+    MovieFavoriteModel
+)
+from src.database.models.notifications import NotificationModel
+from src.database.models.cart import CartModel
+from src.database.models.orders import Orders
+from src.database.models.payments import Payment
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -94,28 +106,21 @@ class UserModel(Base):
     )
 
     group: Mapped["UserGroupModel"] = relationship(
-        "UserGroupModel",
         back_populates="users"
     )
     activation_token: Mapped[Optional["ActivationTokenModel"]] = relationship(
-        "ActivationTokenModel",
         back_populates="user",
         cascade="all, delete-orphan"
     )
-    password_reset_token: Mapped[Optional["PasswordResetTokenModel"]] = (
-        relationship(
-            "PasswordResetTokenModel",
-            back_populates="user",
-            cascade="all, delete-orphan"
-        )
+    password_reset_token: Mapped[Optional["PasswordResetTokenModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
     )
     refresh_tokens: Mapped[List["RefreshTokenModel"]] = relationship(
-        "RefreshTokenModel",
         back_populates="user",
         cascade="all, delete-orphan"
     )
     profile: Mapped[Optional["UserProfileModel"]] = relationship(
-        "UserProfileModel",
         back_populates="user",
         cascade="all, delete-orphan"
     )
@@ -135,6 +140,10 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    comment_likes: Mapped[List["CommentLikeModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
     notifications: Mapped[List["NotificationModel"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -146,11 +155,15 @@ class UserModel(Base):
         foreign_keys="[NotificationModel.trigger_user_id]"
     )
     cart: Mapped["CartModel"] = relationship(
-        "Carts",
         back_populates="user",
         uselist=False
     )
-    orders: Mapped[list["Orders"]] = relationship(
+    orders: Mapped[List["Orders"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    payments: Mapped[List["Payment"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin"
@@ -214,7 +227,7 @@ class UserProfileModel(Base):
     )
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    avatar: Mapped[Optional[str]] = mapped_column(String(255))
+    _avatar: Mapped[Optional[str]] = mapped_column("avatar", String(255))
     gender: Mapped[GenderEnum] = mapped_column(
         Enum(GenderEnum)
     )
@@ -238,6 +251,20 @@ class UserProfileModel(Base):
             f" last_name={self.last_name}, "
             f"gender={self.gender}, date_of_birth={self.date_of_birth})>"
         )
+
+    @property
+    def avatar(self) -> Optional[str]:
+        return self._avatar
+
+    @avatar.setter
+    def avatar(self, value: Optional[Path | str]) -> None:
+        """
+        Convert WindowsPath to string before saving to avatar field.
+        """
+        if isinstance(value, Path):
+            self._avatar = value.as_posix()
+        else:
+            self._avatar = value
 
 
 class TokenBaseModel(Base):
