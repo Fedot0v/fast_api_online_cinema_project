@@ -81,7 +81,7 @@ def get_user_auth_service(
     user_repository: UserRepository = Depends(get_user_repository),
     refresh_token_repository: RefreshTokenRepository = Depends(get_refresh_token_repository)
 ) -> UserAuthService:
-    logger.info("Creating UserAccountService instance")
+    logger.info("Creating UserAuthService instance")
     return UserAuthService(
         db=db,
         jwt_manager=jwt_manager,
