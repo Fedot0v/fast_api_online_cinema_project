@@ -4,7 +4,7 @@ from typing import Tuple, List, Any, Coroutine, Type, Optional, Sequence
 
 from fastapi import HTTPException
 
-from src.database.models.orders import Orders, StatusEnum, OrderItems
+from src.database.models.orders import Orders, OrderStatusEnum, OrderItems
 from src.exceptions.orders import OrderNotFoundError
 from src.repositories.cart.cart_rep import CartRepository
 from src.repositories.orders.order_repo import OrderRepository
@@ -60,7 +60,7 @@ class OrdersService:
         order = Orders(
             user_id=user_id,
             total_amount=total_amount,
-            status=StatusEnum.PENDING,
+            status=OrderStatusEnum.PENDING,
             created_at=datetime.now()
         )
         order.order_items = [
@@ -89,15 +89,15 @@ class OrdersService:
                 status_code=404,
                 detail=str(e)
             )
-        if order.status != StatusEnum.PENDING:
+        if order.status != OrderStatusEnum.PENDING:
             raise HTTPException(
                 status_code=400,
                 detail="Order cannot be paid"
             )
 
         new_status = (
-            StatusEnum.PAID
-        ) if payment_success else StatusEnum.CANCELED
+            OrderStatusEnum.PAID
+        ) if payment_success else OrderStatusEnum.CANCELED
         order = await self.order_repository.update_order_status(
             order_id,
             new_status
@@ -117,7 +117,7 @@ class OrdersService:
 
         if order.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        if order.status != StatusEnum.PENDING:
+        if order.status != OrderStatusEnum.PENDING:
             raise HTTPException(
                 status_code=400,
                 detail="Order cannot be canceled"
@@ -125,7 +125,7 @@ class OrdersService:
 
         order = await self.order_repository.update_order_status(
             order_id,
-            StatusEnum.CANCELED
+            OrderStatusEnum.CANCELED
         )
         return order
 
@@ -148,7 +148,7 @@ class AdminOrdersService(OrdersService):
             user_id: Optional[int] = None,
             date_from: Optional[datetime] = None,
             date_to: Optional[datetime] = None,
-            status: Optional[StatusEnum] = None
+            status: Optional[OrderStatusEnum] = None
     ) -> Sequence[Orders]:
         try:
             orders = await self.order_repository.get_orders_with_filters(

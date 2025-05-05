@@ -6,9 +6,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import UserModel
-from src.repositories.accounts import (
-    UserRepository,
-    PasswordResetTokenRepository
+from src.repositories.accounts.accounts import (
+    PasswordResetTokenRepository,
+    UserRepository
 )
 from src.services.base import BaseService
 from src.services.emails import EmailSenderService
