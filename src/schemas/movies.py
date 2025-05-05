@@ -22,8 +22,28 @@ class MovieBase(BaseModel):
     }
 
 
-class MovieDetail(MovieBase):
+class MovieCreateSchema(BaseModel):
+    title: str
+    year: int
+    time: int
+    imdb: float
+    meta_score: Optional[float] = None
+    gross: Optional[float] = None
+    description: str
+    price: float
+    certification_id: int
+    genre_ids: List[int] = []
+    star_ids: List[int] = []
+    director_ids: List[int] = []
 
+    @validator("imdb")
+    def validate_imdb(cls, v):
+        if not 0 <= v <= 10:
+            raise ValueError("IMDB rating must be between 0 and 10")
+        return v
+
+
+class MovieDetail(MovieBase):
     average_rating: float = 0.0
     genres: List[str] = []
     directors: List[str] = []
@@ -45,6 +65,7 @@ class StarResponseSchema(StarBaseSchema):
 class GenreBaseSchema(BaseModel):
     name: str
 
+
 class GenreResponseSchema(GenreBaseSchema):
     id: int
 
@@ -54,14 +75,14 @@ class MovieQuery(BaseModel):
     limit: int = 10
     sort_by: Optional[str] = None
     sort_order: str = "asc"
-    filters: Optional[Dict[str, any]] = None
+    filters: Optional[Dict[str, str]] = None
     search_criteria: Optional[Dict[str, str]] = None
     partial_match: bool = True
 
 
 class CommentCreateSchema(BaseModel):
-     content: str = Field(..., min_length=1, max_length=1000)
-     parent_comment_id: Optional[int] = None
+    content: str = Field(..., min_length=1, max_length=1000)
+    parent_comment_id: Optional[int] = None
 
 
 class CommentReplySchema(BaseModel):
@@ -81,7 +102,7 @@ class CommentResponseSchema(BaseModel):
     user_id: int
     content: str
     created_at: datetime
-    replies: list[CommentReplySchema] = []
+    replies: Optional[list[CommentReplySchema]] = []
 
     model_config = {
         "from_attributes": True
@@ -133,3 +154,16 @@ class RatingResponse(BaseModel):
 class RatingAverageResponse(BaseModel):
     movie_id: int
     average_rating: float
+
+
+class CertificationCreateSchema(BaseModel):
+    name: str
+
+
+class CertificationOutSchema(BaseModel):
+    id: int
+    name: str
+
+    model_config = {
+        "from_attributes": True
+    }

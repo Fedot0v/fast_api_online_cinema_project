@@ -1,6 +1,6 @@
 from fastapi import Depends, APIRouter, status
 
-from src.dependencies.auth import require_permissions
+from src.dependencies.auth import require_permissions, get_current_user
 from src.dependencies.cart import get_cart_service
 from src.schemas.cart import CartResponse, CartItemResponse, MovieToCartRequest
 from src.services.cart.cart_service import CartService
@@ -16,8 +16,7 @@ router = APIRouter(prefix="/cart", tags=["cart"])
     summary="Add movie to cart",
     description="Add a movie to the user's cart. Creates a cart if it doesn't exist. Ensures the movie is not already in the cart. Requires 'cart' permission and ownership.",
     dependencies=[Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
+        ["cart"])
     )],
     responses={
         201: {
@@ -123,10 +122,7 @@ router = APIRouter(prefix="/cart", tags=["cart"])
 async def add_movie_to_cart(
     request: MovieToCartRequest,
     cart_service: CartService = Depends(get_cart_service),
-    current_user: dict = Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
-    )
+    current_user: dict = Depends(get_current_user)
 ):
     cart_item = await cart_service.add_movie_to_cart(
         current_user["user_id"],
@@ -134,16 +130,14 @@ async def add_movie_to_cart(
     )
     return CartItemResponse.model_validate(cart_item)
 
+
 @router.delete(
     "/remove-movie/{movie_id}",
     response_model=CartItemResponse,
     status_code=status.HTTP_200_OK,
     summary="Remove movie from cart",
     description="Remove a movie from the user's cart. Returns the removed cart item. Requires 'cart' permission and ownership.",
-    dependencies=[Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
-    )],
+    dependencies=[Depends(require_permissions(["cart"]))],
     responses={
         200: {
             "description": "Successful Response - Movie removed from cart.",
@@ -227,10 +221,7 @@ async def add_movie_to_cart(
 async def remove_movie_from_cart(
     movie_id: int,
     cart_service: CartService = Depends(get_cart_service),
-    current_user: dict = Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
-    )
+    current_user: dict = Depends(get_current_user)
 ):
     cart_item = await cart_service.remove_movie_from_cart(current_user["user_id"], movie_id)
     return CartItemResponse.model_validate(cart_item)
@@ -242,8 +233,7 @@ async def remove_movie_from_cart(
     summary="Get user's cart",
     description="Retrieve the user's cart with all items, their associated movies, and total amount to pay. Requires 'cart' permission and ownership.",
     dependencies=[Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
+        ["cart"])
     )],
     responses={
         200: {
@@ -337,11 +327,7 @@ async def remove_movie_from_cart(
 )
 async def get_my_cart(
     cart_service: CartService = Depends(get_cart_service),
-    current_user: dict = Depends(
-        require_permissions(
-            ["cart"],
-            require_owner=True)
-    )
+    current_user: dict = Depends(get_current_user)
 ):
     cart = await cart_service.get_cart(current_user["user_id"])
     return CartResponse.model_validate(cart)
@@ -352,8 +338,7 @@ async def get_my_cart(
     summary="Clear user's cart",
     description="Delete the user's cart and all its items. Requires 'cart' permission and ownership.",
     dependencies=[Depends(require_permissions(
-        ["cart"],
-        require_owner=True)
+        ["cart"])
     )],
     responses={
         204: {
@@ -422,10 +407,6 @@ async def get_my_cart(
 )
 async def clear_cart(
     cart_service: CartService = Depends(get_cart_service),
-    current_user: dict = Depends(
-        require_permissions(
-            ["cart"],
-            require_owner=True)
-    )
+    current_user: dict = Depends(get_current_user)
 ):
     await cart_service.delete_cart(current_user["user_id"])
