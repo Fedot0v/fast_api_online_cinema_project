@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 src/.env
 .idea/
+/database/
+.vscode/
+
+
