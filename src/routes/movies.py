@@ -20,6 +20,7 @@ from src.schemas.movies import (
     RatingCreate,
     MovieCreateSchema,
     FavoriteResponseSchema,
+    MovieUpdateSchema,
 )
 from src.services.movies.comments_service import CommentsService
 from src.services.movies.favorites_service import FavoriteService
@@ -817,3 +818,100 @@ async def delete_rating(
     rating_service: RatingService = Depends(get_rating_service)
 ):
     await rating_service.delete_rating(user["user_id"], movie_id)
+
+@router.patch(
+    "/{movie_id}",
+    response_model=MovieDetail,
+    summary="Update a movie",
+    description="Update an existing movie's details. Requires 'write' permission.",
+    dependencies=[Depends(require_permissions(["write"]))],
+    responses={
+        200: {
+            "description": "Successful Response - Movie updated successfully.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "title": "Updated Movie Title",
+                        "year": 2023,
+                        "time": 120,
+                        "imdb": 8.8,
+                        "meta_score": 74.0,
+                        "description": "Updated description",
+                        "price": 19.99,
+                        "certification_id": 1,
+                        "average_rating": 8.5,
+                        "genres": ["Action", "Drama"],
+                        "directors": ["Director Name"],
+                        "stars": ["Actor Name"]
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Bad Request - Invalid movie data.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Invalid movie data provided."}
+                }
+            }
+        },
+        404: {
+            "description": "Not Found - Movie not found.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Movie not found."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred while updating the movie.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred while updating the movie."}
+                }
+            }
+        }
+    }
+)
+async def update_movie(
+    movie_id: int,
+    movie_data: MovieUpdateSchema,
+    movie_service: MovieService = Depends(get_movie_service)
+) -> MovieDetail:
+    movie = await movie_service.update_movie(movie_id, movie_data)
+    return MovieDetail.model_validate(movie)
+
+@router.delete(
+    "/{movie_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a movie",
+    description="Delete a movie. Requires 'delete' permission.",
+    dependencies=[Depends(require_permissions(["delete"]))],
+    responses={
+        204: {
+            "description": "Successful Response - Movie deleted successfully."
+        },
+        404: {
+            "description": "Not Found - Movie not found.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Movie not found."}
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error - An error occurred while deleting the movie.",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An error occurred while deleting the movie."}
+                }
+            }
+        }
+    }
+)
+async def delete_movie(
+    movie_id: int,
+    movie_service: MovieService = Depends(get_movie_service)
+):
+    await movie_service.delete_movie(movie_id)

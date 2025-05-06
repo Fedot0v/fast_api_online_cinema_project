@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.routes import accounts, cart, directors, genres, movies, orders, stars, certifications
-from src.database.session_sqlite import init_db, close_db
+from src.database import init_db, close_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

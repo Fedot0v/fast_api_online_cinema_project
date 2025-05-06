@@ -12,6 +12,7 @@ class StripePaymentProvider(PaymentProviderInterface):
         self.api_key = api_key
         self.client = stripe
         self.client.api_key = api_key
+        self._last_payment_intent_id = None
 
     async def initiate_payment(self, order_id: str, amount: Decimal, currency: str) -> str:
         try:
@@ -25,16 +26,24 @@ class StripePaymentProvider(PaymentProviderInterface):
                 self.client.PaymentIntent.create,
                 **payment_params
             )
+            self._last_payment_intent_id = payment_intent["id"]
             return payment_intent["client_secret"]
         except stripe.error.StripeError as e:
             raise ValueError(f"Stripe error: {str(e)}")
 
-    async def complete_payment(self, external_payment_id: str) -> bool:
+    async def get_payment_intent(self, external_payment_id: str) -> dict:
         try:
             payment_intent = await asyncio.to_thread(
                 self.client.PaymentIntent.retrieve,
                 external_payment_id
             )
+            return payment_intent
+        except stripe.error.StripeError as e:
+            raise ValueError(f"Stripe error: {str(e)}")
+
+    async def complete_payment(self, external_payment_id: str) -> bool:
+        try:
+            payment_intent = await self.get_payment_intent(external_payment_id)
             return payment_intent["status"] == "succeeded"
         except stripe.error.StripeError as e:
             raise ValueError(f"Stripe error: {str(e)}")
@@ -53,3 +62,7 @@ class StripePaymentProvider(PaymentProviderInterface):
             return refund["status"] == "succeeded"
         except stripe.error.StripeError as e:
             raise ValueError(f"Stripe error: {str(e)}")
+
+    def get_last_payment_intent_id(self) -> Optional[str]:
+        """Get the ID of the last initiated payment intent."""
+        return self._last_payment_intent_id
