@@ -38,19 +38,6 @@ class Settings(BaseSettings):
     STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "minio")
-    
-    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
-    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
-    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "False").lower() == "true"
-    
-    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
-    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "")
-    AWS_S3_ENDPOINT: str = os.getenv("AWS_S3_ENDPOINT", f"s3.{AWS_REGION}.amazonaws.com")
-
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
