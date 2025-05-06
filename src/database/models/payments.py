@@ -10,6 +10,8 @@ from src.database.models.base import Base
 
 
 class PaymentStatusEnum(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
     SUCCESSFUL = "successful"
     CANCELED = "canceled"
     REFUNDED = "refunded"
@@ -42,7 +44,7 @@ class Payment(Base):
     status: Mapped[str] = mapped_column(
         Enum(PaymentStatusEnum),
         nullable=False,
-        default=PaymentStatusEnum.SUCCESSFUL
+        default=PaymentStatusEnum.PENDING
     )
     amount: Mapped[Decimal] = mapped_column(
         DECIMAL(10, 2),
@@ -50,7 +52,8 @@ class Payment(Base):
     )
     external_payment_id: Mapped[Optional[str]] = mapped_column(
         String,
-        nullable=True
+        nullable=True,
+        unique=True
     )
 
     user: Mapped["UserModel"] = relationship(back_populates="payments")

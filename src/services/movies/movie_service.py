@@ -8,7 +8,7 @@ from src.repositories.movies.genres import GenreRepository
 from src.repositories.movies.movies import MovieRepository
 from src.repositories.movies.ratings import RatingsRepository
 from src.repositories.movies.stars import StarRepository
-from src.schemas.movies import MovieBase, MovieDetail, MovieQuery, MovieCreateSchema
+from src.schemas.movies import MovieBase, MovieDetail, MovieQuery, MovieCreateSchema, MovieUpdateSchema
 
 
 class MovieService:
@@ -333,3 +333,90 @@ class MovieService:
 
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    async def update_movie(self, movie_id: int, movie_data: MovieUpdateSchema) -> MovieModel:
+        """
+        Обновляет существующий фильм.
+        
+        Args:
+            movie_id: ID фильма для обновления
+            movie_data: Новые данные фильма
+            
+        Returns:
+            MovieModel: Обновленный фильм
+            
+        Raises:
+            HTTPException: Если фильм не найден или данные некорректны
+        """
+        # Проверяем существование фильма
+        movie = await self.movie_repository.get_movie_by_id(movie_id)
+        if not movie:
+            raise HTTPException(status_code=404, detail="Movie not found")
+
+        # Проверяем существование сертификации, если она указана
+        if movie_data.certification_id is not None:
+            certification = await self.certification_repository.get_certification_by_id(
+                movie_data.certification_id
+            )
+            if not certification:
+                raise HTTPException(status_code=404, detail="Certification not found")
+
+        try:
+            # Обновляем основные данные фильма
+            movie = await self.movie_repository.update_movie(
+                movie_id=movie_id,
+                movie_data=movie_data
+            )
+
+            # Обновляем связанные данные, если они указаны
+            if movie_data.genre_ids is not None:
+                await self.genre_repository.update_movie_genres(
+                    movie_id=movie_id,
+                    genre_ids=movie_data.genre_ids
+                )
+
+            if movie_data.director_ids is not None:
+                await self.director_repository.update_movie_directors(
+                    movie_id=movie_id,
+                    director_ids=movie_data.director_ids
+                )
+
+            if movie_data.star_ids is not None:
+                await self.star_repository.update_movie_stars(
+                    movie_id=movie_id,
+                    star_ids=movie_data.star_ids
+                )
+
+            # Получаем обновленный фильм со всеми связями
+            updated_movie = await self.movie_repository.get_movie_by_id(movie_id)
+            return updated_movie
+
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"An error occurred while updating the movie: {str(e)}"
+            )
+
+    async def delete_movie(self, movie_id: int) -> None:
+        """
+        Удаляет фильм.
+        
+        Args:
+            movie_id: ID фильма для удаления
+            
+        Raises:
+            HTTPException: Если фильм не найден или произошла ошибка при удалении
+        """
+        movie = await self.movie_repository.get_movie_by_id(movie_id)
+        if not movie:
+            raise HTTPException(status_code=404, detail="Movie not found")
+
+        try:
+            await self.movie_repository.delete_movie(movie_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"An error occurred while deleting the movie: {str(e)}"
+            )

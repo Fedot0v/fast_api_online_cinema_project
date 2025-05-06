@@ -17,7 +17,13 @@ from src.database.models.movies import (
 )
 from src.database.utils import normalize_name
 from src.repositories.base import BaseRepository
-from src.schemas.movies import MovieBase, MovieCreateSchema
+from src.schemas.movies import (
+    MovieBase,
+    MovieDetail,
+    MovieQuery,
+    MovieCreateSchema,
+    MovieUpdateSchema,
+)
 
 
 class MovieRepository(BaseRepository):
@@ -273,3 +279,64 @@ class MovieRepository(BaseRepository):
         except Exception as e:
             await self.db.rollback()
             raise ValueError(f"Unexpected error: {str(e)}")
+
+    async def update_movie(self, movie_id: int, movie_data: MovieUpdateSchema) -> MovieModel:
+        """
+        Обновляет существующий фильм.
+        
+        Args:
+            movie_id: ID фильма для обновления
+            movie_data: Новые данные фильма
+            
+        Returns:
+            MovieModel: Обновленный фильм
+            
+        Raises:
+            ValueError: Если данные некорректны
+        """
+        try:
+            movie = await self.get_movie_by_id(movie_id)
+            if not movie:
+                raise ValueError("Movie not found")
+
+            # Обновляем только те поля, которые были предоставлены
+            update_data = movie_data.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                if field not in ["genre_ids", "director_ids", "star_ids"]:
+                    setattr(movie, field, value)
+
+            await self.db.commit()
+            await self.db.refresh(movie)
+            return movie
+
+        except IntegrityError as e:
+            await self.db.rollback()
+            raise ValueError(f"Database integrity error: {str(e)}")
+        except Exception as e:
+            await self.db.rollback()
+            raise ValueError(f"Error updating movie: {str(e)}")
+
+    async def delete_movie(self, movie_id: int) -> None:
+        """
+        Удаляет фильм.
+        
+        Args:
+            movie_id: ID фильма для удаления
+            
+        Raises:
+            ValueError: Если фильм не найден или произошла ошибка при удалении
+        """
+        try:
+            movie = await self.get_movie_by_id(movie_id)
+            if not movie:
+                raise ValueError("Movie not found")
+
+            await self.db.delete(movie)
+            await self.db.commit()
+
+        except IntegrityError as e:
+            await self.db.rollback()
+            raise ValueError(f"Database integrity error: {str(e)}")
+        except Exception as e:
+            await self.db.rollback()
+            raise ValueError(f"Error deleting movie: {str(e)}")

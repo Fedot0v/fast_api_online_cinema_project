@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 from pydantic.v1 import validator
@@ -167,3 +168,48 @@ class CertificationOutSchema(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class MovieUpdateSchema(BaseModel):
+    """Schema for updating a movie."""
+    title: Optional[str] = None
+    year: Optional[int] = None
+    time: Optional[int] = None
+    imdb: Optional[float] = None
+    meta_score: Optional[float] = None
+    description: Optional[str] = None
+    price: Optional[Decimal] = None
+    certification_id: Optional[int] = None
+    genre_ids: Optional[List[int]] = None
+    director_ids: Optional[List[int]] = None
+    star_ids: Optional[List[int]] = None
+
+    @validator("price")
+    def validate_price(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Price must be greater than 0")
+        return v
+
+    @validator("year")
+    def validate_year(cls, v):
+        if v is not None and v < 1888:  # Первый фильм был снят в 1888 году
+            raise ValueError("Year must be greater than 1888")
+        return v
+
+    @validator("time")
+    def validate_time(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Time must be greater than 0")
+        return v
+
+    @validator("imdb")
+    def validate_imdb(cls, v):
+        if v is not None and (v < 0 or v > 10):
+            raise ValueError("IMDb rating must be between 0 and 10")
+        return v
+
+    @validator("meta_score")
+    def validate_meta_score(cls, v):
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("Meta score must be between 0 and 100")
+        return v
