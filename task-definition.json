@@ -30,7 +30,7 @@
       "environment": [
         {
           "name": "ENVIRONMENT",
-          "value": "production"
+          "value": "developing"
         },
         {
           "name": "DATABASE_URL",
