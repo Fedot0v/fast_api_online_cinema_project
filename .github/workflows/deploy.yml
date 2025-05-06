@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
@@ -7,11 +7,6 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: eu-central-1
-  ECR_REPOSITORY: online-cinema
-  ECS_SERVICE: online-cinema
-  ECS_CLUSTER: online-cinema-cluster
-  CONTAINER_NAME: web
   PYTHON_VERSION: "3.11"
 
 jobs:

@@ -38,16 +38,13 @@ class Settings(BaseSettings):
     STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-    # Storage Configuration
-    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "minio")  # minio или s3
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "minio")
     
-    # MinIO Configuration (для локальной разработки)
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
     MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
     MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "False").lower() == "true"
     
-    # AWS S3 Configuration (для продакшена)
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
@@ -89,7 +86,6 @@ class TestingSettings(Settings):
     STRIPE_WEBHOOK_SECRET: str = "whsec_test_1234567890"
 
     def validate_settings(self):
-        """Тестовые настройки всегда валидны."""
         pass
 
 
