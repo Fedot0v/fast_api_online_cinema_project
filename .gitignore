@@ -3,6 +3,6 @@ __pycache__/
 .env
 .idea/
 
-/database/
+./database/
 .vscode/
-/static/
+./static/
