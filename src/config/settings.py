@@ -1,6 +1,9 @@
 import logging
 import os
 from pathlib import Path
+from functools import lru_cache
+from typing import Optional
+from dotenv import load_dotenv
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,6 +37,22 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND")
     STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    # Storage Configuration
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "minio")  # minio или s3
+    
+    # MinIO Configuration (для локальной разработки)
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "False").lower() == "true"
+    
+    # AWS S3 Configuration (для продакшена)
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "")
+    AWS_S3_ENDPOINT: str = os.getenv("AWS_S3_ENDPOINT", f"s3.{AWS_REGION}.amazonaws.com")
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
@@ -74,7 +93,8 @@ class TestingSettings(Settings):
         pass
 
 
-def get_settings() -> BaseSettings:
+@lru_cache()
+def get_settings() -> Settings:
     """
     Retrieve the application settings based on the environment.
 
