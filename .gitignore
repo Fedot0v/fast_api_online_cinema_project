@@ -1,4 +1,7 @@
 __pycache__/
 *.pyc
-src/.env
+.env
 .idea/
+
+# Uploaded files
+static/

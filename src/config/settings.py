@@ -1,6 +1,9 @@
 import logging
 import os
 from pathlib import Path
+from functools import lru_cache
+from typing import Optional
+from dotenv import load_dotenv
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +17,7 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).parent.parent
     BASE_URL: str = "http://localhost:8000"
     PATH_TO_DB: str = str(BASE_DIR / "database" / "source" / "movies.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/cinema_db")
     PATH_TO_MOVIES_CSV: str = str(BASE_DIR / "database" / "seed_data" / "imdb_movies.csv")
     SECRET_KEY_ACCESS: str = os.getenv("SECRET_KEY_ACCESS")
     SECRET_KEY_REFRESH: str = os.getenv("SECRET_KEY_REFRESH")
@@ -32,6 +36,20 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL")
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND")
     STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "minio")
+    
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "False").lower() == "true"
+    
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "")
+    AWS_S3_ENDPOINT: str = os.getenv("AWS_S3_ENDPOINT", f"s3.{AWS_REGION}.amazonaws.com")
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
@@ -54,6 +72,7 @@ class Settings(BaseSettings):
 
 class TestingSettings(Settings):
     PATH_TO_DB: str = ":memory:"
+    DATABASE_URL: str = "sqlite+aiosqlite:///:memory:"
     EMAIL_HOSTNAME: str = "localhost"
     EMAIL_PORT: int = 1025
     EMAIL_ADDRESS: str = "test@example.com"
@@ -64,13 +83,14 @@ class TestingSettings(Settings):
     CELERY_BROKER_URL: str = "memory://localhost/"
     CELERY_RESULT_BACKEND: str = "cache+memory://"
     STRIPE_API_KEY: str = "sk_test_1234567890"
+    STRIPE_WEBHOOK_SECRET: str = "whsec_test_1234567890"
 
     def validate_settings(self):
-        """Тестовые настройки всегда валидны."""
         pass
 
 
-def get_settings() -> BaseSettings:
+@lru_cache()
+def get_settings() -> Settings:
     """
     Retrieve the application settings based on the environment.
 

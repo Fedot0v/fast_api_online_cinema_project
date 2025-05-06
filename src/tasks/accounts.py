@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import logging
+import asyncio
 
 from celery import shared_task
 from sqlalchemy import delete
@@ -25,6 +26,9 @@ async def clean_expired_tokens():
                 result = await db.execute(stmt)
                 deleted_count = result.rowcount
                 logger.info(f"Deleted {deleted_count} expired tokens")
+    except asyncio.CancelledError:
+        logger.warning("Token cleanup task was cancelled")
+        raise
     except Exception as e:
         logger.error(
             f"Error during cleanup of expired refresh tokens: {str(e)}",
@@ -66,16 +70,20 @@ async def send_email_task(
             password_complete_email_template_name=settings.PASSWORD_COMPLETE_EMAIL_TEMPLATE_NAME,
         )
 
-        if email_type == "activation":
-            await email_service.send_activation_email(recipient, link)
-        elif email_type == "activation_complete":
-            await email_service.send_activation_complete_email(recipient, link)
-        elif email_type == "password_reset":
-            await email_service.send_password_reset_email(recipient, link)
-        elif email_type == "password_reset_complete":
-            await email_service.send_password_reset_complete_email(recipient, link)
-        else:
-            raise ValueError(f"Unknown email type: {email_type}")
+        try:
+            if email_type == "activation":
+                await email_service.send_activation_email(recipient, link)
+            elif email_type == "activation_complete":
+                await email_service.send_activation_complete_email(recipient, link)
+            elif email_type == "password_reset":
+                await email_service.send_password_reset_email(recipient, link)
+            elif email_type == "password_reset_complete":
+                await email_service.send_password_reset_complete_email(recipient, link)
+            else:
+                raise ValueError(f"Unknown email type: {email_type}")
+        except asyncio.CancelledError:
+            logger.warning(f"Email sending task was cancelled for {recipient}")
+            raise send_email_task.retry(exc=None, countdown=60, max_retries=3)
 
         logger.info(f"{email_type.capitalize()} email sent successfully to {recipient}")
     except Exception as e:

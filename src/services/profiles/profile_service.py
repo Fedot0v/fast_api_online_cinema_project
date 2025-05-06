@@ -10,6 +10,7 @@ from src.exceptions.profiles import ProfileCreationError, ProfileNotFoundError, 
 from src.repositories.accounts.profiles import ProfileRepository
 from src.schemas.accounts import ProfileCreateSchema, UpdateProfileSchema
 
+
 logger = logging.getLogger(__name__)
 
 class ProfileService:

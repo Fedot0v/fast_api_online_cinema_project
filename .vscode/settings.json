@@ -1,0 +1,6 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\nikit\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\fast-api-online-cinema-project-xpc5b3Ro-py3.11\\Scripts\\python.exe",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}"
+    ]
+} 
