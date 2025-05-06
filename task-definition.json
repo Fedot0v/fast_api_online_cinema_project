@@ -1,0 +1,65 @@
+{
+  "family": "online-cinema",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "nginx",
+      "image": "<ECR_REPOSITORY_URL>/nginx:latest",
+      "portMappings": [
+        {
+          "containerPort": 80,
+          "hostPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "links": ["web"],
+      "essential": true
+    },
+    {
+      "name": "web",
+      "image": "<ECR_REPOSITORY_URL>:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql+asyncpg://postgres:postgres@<RDS_ENDPOINT>/cinema_db"
+        },
+        {
+          "name": "REDIS_HOST",
+          "value": "<ELASTICACHE_ENDPOINT>"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SECRET_KEY_ACCESS",
+          "valueFrom": "arn:aws:ssm:<region>:<account-id>:parameter/online-cinema/SECRET_KEY_ACCESS"
+        },
+        {
+          "name": "SECRET_KEY_REFRESH",
+          "valueFrom": "arn:aws:ssm:<region>:<account-id>:parameter/online-cinema/SECRET_KEY_REFRESH"
+        },
+        {
+          "name": "STRIPE_API_KEY",
+          "valueFrom": "arn:aws:ssm:<region>:<account-id>:parameter/online-cinema/STRIPE_API_KEY"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRET",
+          "valueFrom": "arn:aws:ssm:<region>:<account-id>:parameter/online-cinema/STRIPE_WEBHOOK_SECRET"
+        }
+      ],
+      "essential": true
+    }
+  ]
+} 
