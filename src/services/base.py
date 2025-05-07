@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class BaseAccountService:
+class BaseService:
     def __init__(
             self,
             db: AsyncSession

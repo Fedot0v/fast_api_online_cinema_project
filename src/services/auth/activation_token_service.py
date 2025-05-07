@@ -1,17 +1,21 @@
 from datetime import timezone, datetime
+import logging
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import ActivationTokenModel, UserModel
-from src.repositories.accounts import ActivationTokenRepository
+from src.repositories.accounts.accounts import ActivationTokenRepository
 from src.security.interfaces import JWTAuthManagerInterface
 from src.services.auth.user_service import UserService
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.emails import EmailSenderService
 
 
-class ActivationTokenService(BaseAccountService):
+logger = logging.getLogger(__name__)
+
+
+class ActivationTokenService(BaseService):
     def __init__(
             self,
             db: AsyncSession,
@@ -22,7 +26,8 @@ class ActivationTokenService(BaseAccountService):
         super().__init__(db)
         self.jwt_manager = jwt_manager
         self.token_repository = token_repository
-        self.email_sender_service = email_sender_service,
+        self.email_sender_service = email_sender_service
+        logger.info(f"Initialized ActivationTokenService with email_sender_service type: {type(self.email_sender_service)}")
 
     async def create_activation_token(self, user):
         activation_token = self.jwt_manager.create_access_token(

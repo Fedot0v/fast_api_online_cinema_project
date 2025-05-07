@@ -1,6 +1,8 @@
 from typing import cast
+import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Body, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
 
 from src.dependencies.accounts import get_user_service, get_activation_token_service, get_password_reset_token_service, \
@@ -10,8 +12,16 @@ from src.schemas.accounts import (
     UserRegistrationSchema,
     UserRegistrationResponseSchema,
     MessageSchema,
-    BaseTokenSchema, BaseEmailSchema, PasswordResetCompleteRequestSchema, LoginResponseSchema, LoginRequestSchema,
-    RefreshTokenSchema, AccessTokenSchema, ProfileResponseSchema, ProfileCreateSchema, UpdateProfileSchema
+    BaseTokenSchema,
+    BaseEmailSchema,
+    PasswordResetCompleteRequestSchema,
+    LoginResponseSchema,
+    LoginRequestSchema,
+    RefreshTokenSchema,
+    AccessTokenSchema,
+    ProfileResponseSchema,
+    ProfileCreateSchema,
+    UpdateProfileSchema, ChangeGroupRequest
 )
 from src.services.auth.activation_token_service import ActivationTokenService
 from src.services.auth.admin_service import AdminService
@@ -21,7 +31,10 @@ from src.services.auth.user_auth_service import UserAuthService
 from src.services.auth.user_service import UserService
 from src.services.profiles.profile_service import ProfileService
 
-router = APIRouter()
+router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -227,12 +240,13 @@ async def password_reset_complete(
     }
 )
 async def login(
-        login_data: LoginRequestSchema,
+        # login_data: LoginRequestSchema,
+        form_data: OAuth2PasswordRequestForm = Depends(),
         user_service: UserAuthService = Depends(get_user_auth_service)
 ) -> LoginResponseSchema:
     response = await user_service.login_user(
-        cast(str, login_data.email),
-        cast(str, login_data.password)
+        cast(str, form_data.username),
+        cast(str, form_data.password)
     )
     return LoginResponseSchema(**response)
 
@@ -287,7 +301,7 @@ async def login(
 )
 async def refresh_access_token(
         refresh_data: RefreshTokenSchema,
-        user_service: UserAuthService = Depends(get_user_service)
+        user_service: UserAuthService = Depends(get_user_auth_service)
 ) -> AccessTokenSchema:
     response = await user_service.refresh_access_token(
         cast(str, refresh_data.refresh_token)
@@ -322,7 +336,7 @@ async def refresh_access_token(
 )
 async def logout(
     token_data: RefreshTokenSchema,
-    user_service: UserAuthService = Depends(get_user_service)
+    user_service: UserAuthService = Depends(get_user_auth_service)
 ) -> MessageSchema:
     return await user_service.logout_user(token_data.refresh_token)
 
@@ -362,12 +376,15 @@ async def logout(
     dependencies=[Depends(require_permissions(["manage_users"]))]
 )
 async def change_group(
-        user_id: int,
-        new_group_id: int,
+        data: ChangeGroupRequest = Body(...),
         current_user: dict = Depends(get_current_user),
         admin_service: AdminService = Depends(get_admin_service)
 ) -> MessageSchema:
-    await admin_service.change_user_group(user_id, new_group_id, current_user["user_id"])
+    await admin_service.change_user_group(
+        data.user_id,
+        data.new_group_id,
+        current_user["user_id"]
+    )
     return MessageSchema(message="User group changed successfully.")
 
 
@@ -439,27 +456,38 @@ async def manual_activate(
     }
 )
 async def create_profile(
-        data: ProfileCreateSchema = Depends(ProfileCreateSchema.from_form),
-        current_user: dict = Depends(get_current_user),
-        profile_service: ProfileService = Depends(get_profile_service)
+    data: ProfileCreateSchema = Depends(ProfileCreateSchema.from_form),
+    current_user: dict = Depends(get_current_user),
+    profile_service: ProfileService = Depends(get_profile_service)
 ) -> ProfileResponseSchema:
-    profile = await profile_service.create_profile(current_user["user_id"], data)
-    return ProfileResponseSchema(
-        id=profile.id,
-        user_id=profile.user_id,
-        first_name=profile.first_name,
-        last_name=profile.last_name,
-        gender=profile.gender,
-        date_of_birth=profile.date_of_birth,
-        info=profile.info,
-        avatar=profile.avatar
-    )
+    logger.info(f"Creating profile for user_id: {current_user['user_id']}")
+    try:
+        profile = await profile_service.create_profile(current_user["user_id"], data)
+        logger.debug(f"Profile object: {profile.__dict__}")
+        response = ProfileResponseSchema(
+            id=profile.id,
+            user_id=profile.user_id,
+            first_name=profile.first_name,
+            last_name=profile.last_name,
+            gender=profile.gender,
+            date_of_birth=profile.date_of_birth,
+            info=profile.info,
+            avatar=profile.avatar
+        )
+        logger.info(f"Profile created successfully for user_id: {current_user['user_id']}")
+        return response
+    except Exception as e:
+        logger.error(f"Error creating profile for user_id {current_user['user_id']}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create profile: {str(e)}")
 
 
 @router.patch(
     "/update-profile/",
     response_model=ProfileResponseSchema,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permissions(
+        ["read"]
+    ))],
     responses={
         404: {
             "description": "Not Found - Profile not found.",

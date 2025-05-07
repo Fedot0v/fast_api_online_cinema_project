@@ -1,80 +1,87 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+import os
+import logging
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
 from src.config.settings import get_settings
-from src.database.models.accounts import Base
+from src.database import UserGroupModel, UserGroupEnum
+from src.database.models.base import Base
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
-
 DATABASE_URL = f"sqlite+aiosqlite:///{settings.PATH_TO_DB}"
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+logger.info(f"Connecting to database: {settings.PATH_TO_DB}")
 
-AsyncSQLiteSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore
+
+db_dir = os.path.dirname(settings.PATH_TO_DB)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
+
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSQLiteSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False) #type: ignore
 
 
 async def init_db() -> None:
     """
-    Initialize the database.
-
-    This function creates all tables defined in the SQLAlchemy ORM models.
-    It should be called at the application startup to ensure that the database schema exists.
+    Initialize the database and populate user_groups with default groups.
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully")
+
+    async with AsyncSQLiteSessionLocal() as session:
+        stmt = select(UserGroupModel)
+        result = await session.execute(stmt)
+        groups = result.scalars().all()
+
+        if not groups:
+            logger.info("Populating user_groups with default groups: user, admin, moderator")
+            default_groups = [
+                UserGroupModel(name=UserGroupEnum.USER),
+                UserGroupModel(name=UserGroupEnum.ADMIN),
+                UserGroupModel(name=UserGroupEnum.MODERATOR)
+            ]
+            session.add_all(default_groups)
+            await session.commit()
+            logger.info("Default groups created successfully")
+        else:
+            logger.info(f"user_groups already contains groups: {[g.name for g in groups]}")
 
 
 async def close_db() -> None:
     """
     Close the database connection.
-
-    This function disposes of the database engine, releasing all associated resources.
-    It should be called when the application shuts down to properly close the connection pool.
     """
     await engine.dispose()
-
+    logger.info("Database connection closed")
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide an asynchronous database session.
-
-    This function returns an async generator yielding a new database session.
-    It ensures that the session is properly closed after use.
-
-    :return: An asynchronous generator yielding an AsyncSession instance.
     """
     async with AsyncSQLiteSessionLocal() as session:
         yield session
-
 
 @asynccontextmanager
 async def get_db_contextmanager() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide an asynchronous database session using a context manager.
-
-    This function allows for managing the database session within a `with` statement.
-    It ensures that the session is properly initialized and closed after execution.
-
-    :return: An asynchronous generator yielding an AsyncSession instance.
     """
     async with AsyncSQLiteSessionLocal() as session:
         yield session
 
-
 async def reset_sqlite_database() -> None:
     """
     Reset the SQLite database.
-
-    This function drops all existing tables and recreates them.
-    It is useful for testing purposes or when resetting the database is required.
-
-    Warning: This action is irreversible and will delete all stored data.
-
-    :return: None
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database reset successfully")

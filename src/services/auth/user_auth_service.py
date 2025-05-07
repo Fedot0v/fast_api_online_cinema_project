@@ -1,21 +1,20 @@
 import logging
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import RefreshTokenModel
-from src.repositories.accounts import UserRepository, RefreshTokenRepository
+from src.repositories.accounts.accounts import UserRepository, RefreshTokenRepository
 from src.schemas.accounts import MessageSchema
 from src.security.interfaces import JWTAuthManagerInterface
-from src.services.base import BaseAccountService
+from src.services.base import BaseService
 from src.services.validation.user_validation_service import UserValidationService
 
 
 logger = logging.getLogger(__name__)
 
 
-class UserAuthService(BaseAccountService):
+class UserAuthService(BaseService):
     def __init__(
             self,
             user_repository: UserRepository,
@@ -38,10 +37,10 @@ class UserAuthService(BaseAccountService):
                 )
             )
             access_token = self.jwt_manager.create_access_token(
-                data={"user_id": user.id}
+                data={"user_id": user.id, "group_id": user.group_id}
             )
             refresh_token = self.jwt_manager.create_refresh_token(
-                data={"user_id": user.id}
+                data={"user_id": user.id, "group_id": user.group_id}
             )
             refresh_token_instance = RefreshTokenModel.create(
                 user_id=user.id,
@@ -57,11 +56,12 @@ class UserAuthService(BaseAccountService):
                 "token_type": "bearer"
             }
 
-        except HTTPException as e:
+        except HTTPException:
             await self.db.rollback()
-            raise e
+            raise
 
         except Exception as e:
+            logger.error(f"Error during login: {str(e)}", exc_info=True)
             await self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -80,6 +80,7 @@ class UserAuthService(BaseAccountService):
                 user_id = payload["user_id"]
             except Exception as e:
                 error_msg = str(e).lower()
+                logger.warning(f"Token validation error: {error_msg}")
                 if "expired" in error_msg:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -89,6 +90,7 @@ class UserAuthService(BaseAccountService):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid refresh token."
                 )
+
             token_record = await self.refresh_token_rep.get_refresh_token(token=refresh_token)
             if not token_record:
                 raise HTTPException(
@@ -96,29 +98,30 @@ class UserAuthService(BaseAccountService):
                     detail="Refresh token not found."
                 )
             if token_record.user_id != user_id:
+                logger.warning(f"Token user ID mismatch: {token_record.user_id} != {user_id}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Refresh token not found."
+                    detail="Invalid refresh token."
                 )
-            if token_record.user_id != user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Refresh token not found."
-                )
+
             user = await self.user_repository.get_user_by_id(user_id)
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="User not found."
                 )
+
             new_access_token = self.jwt_manager.create_access_token(
-                data={"user_id": user.id}
+                data={"user_id": user.id, "group_id": user.group_id}
             )
             return {"access_token": new_access_token}
-        except HTTPException as e:
+
+        except HTTPException:
             await self.db.rollback()
-            raise e
+            raise
+
         except Exception as e:
+            logger.error(f"Error during token refresh: {str(e)}", exc_info=True)
             await self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -150,6 +153,7 @@ class UserAuthService(BaseAccountService):
                     )
             except Exception as e:
                 error_msg = str(e).lower()
+                logger.warning(f"Token validation error during logout: {error_msg}")
                 if "expired" in error_msg:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -174,9 +178,9 @@ class UserAuthService(BaseAccountService):
 
             return MessageSchema(message="Logout successful.")
 
-        except HTTPException as e:
-            logger.error(f"HTTP error during logout: {str(e)}", exc_info=True)
-            raise e
+        except HTTPException:
+            raise
+
         except Exception as e:
             logger.error(f"Unexpected error during logout: {str(e)}", exc_info=True)
             raise HTTPException(
